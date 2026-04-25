@@ -38,6 +38,22 @@ COLUMN_CONFIG = {
         "keywords": ["Product Name", "Name", "英文名", "English Name", "product name_en"],
         "type": "core"
     },
+    "spec_zh": {
+        "keywords": ["产品说明", "规格", "说明", "spec", "description", "产品描述", "描述", "参数", "specification", "product information", "product info"],
+        "type": "spec"
+    },
+    "spec_en": {
+        "keywords": ["specification", "specs", "description"],
+        "type": "spec"
+    },
+    "color": {
+        "keywords": ["颜色", "色", "color", "色彩"],
+        "type": "spec"
+    },
+    "package": {
+        "keywords": ["包装", "package", "包装规格", "规格包装"],
+        "type": "spec"
+    },
     "price_rmb": {
         "keywords": ["价格", "单价", "出厂价格", "RMB", "CNY", "价格(人民币)", "人民币", "价", "售价"],
         "type": "core"
@@ -53,7 +69,31 @@ COLUMN_CONFIG = {
     "image": {
         "keywords": ["图片", "Picture", "Photo", "图像", "产品图片", "产品照片", "image path", "image_path", "照片"],
         "type": "core"
+    },
+    "moq": {
+        "keywords": ["MOQ", "最小起订量", "起订量", "最小订量"],
+        "type": "spec"
+    },
+    "lead_time": {
+        "keywords": ["lead time", "交货期", "leadtime", "交货时间"],
+        "type": "spec"
+    },
+    "certification": {
+        "keywords": ["certification", "认证", "证书", "cert"],
+        "type": "spec"
     }
+}
+
+# 字段别名映射：标准化字段名
+FIELD_ALIASES = {
+    "product name": "name_zh",
+    "product name_en": "name_en",
+    "name": "name_zh",
+    "spec": "spec_zh",
+    "specification": "spec_zh",
+    "price": "price_rmb",
+    "price rmb": "price_rmb",
+    "price usd": "price_usd",
 }
 
 # 分隔符定义：用于拆分中英文对照文本
@@ -71,6 +111,39 @@ def is_core_field(col_name: str) -> bool:
                 if kw.lower() in col_lower or col_lower in kw.lower():
                     return True
     return False
+
+
+def find_field_from_config(target_field: str) -> Optional[str]:
+    """从 COLUMN_CONFIG 中查找目标字段的标准名"""
+    if not target_field:
+        return None
+    target_lower = target_field.lower().strip()
+    
+    # 直接匹配
+    if target_field in COLUMN_CONFIG:
+        return target_field
+    
+    # 别名匹配
+    for alias, std_name in FIELD_ALIASES.items():
+        if alias.lower() == target_lower:
+            return std_name
+    
+    # 关键词匹配
+    for field_name, config in COLUMN_CONFIG.items():
+        for kw in config.get("keywords", []):
+            if kw.lower() == target_lower:
+                return field_name
+    return None
+
+
+def get_field_keywords(field_name: str) -> list:
+    """获取字段的关键词列表"""
+    if field_name in COLUMN_CONFIG:
+        return COLUMN_CONFIG[field_name].get("keywords", [])
+    if field_name in FIELD_ALIASES:
+        std_name = FIELD_ALIASES[field_name]
+        return COLUMN_CONFIG.get(std_name, {}).get("keywords", [])
+    return []
 
 
 def get_spec_columns(columns: list) -> list:
@@ -257,18 +330,6 @@ def serialize_specs(df: pd.DataFrame, core_columns: list = None) -> pd.DataFrame
     return result
 
 
-# Column name keywords for intelligent matching
-COLUMN_KEYWORDS = {
-    "model": ["型号", "产品型号", "model", "model number", "货号", "商品编号", "编号", "item", "sku", "code", "serial number", "no", "item no"],
-    "name_zh": ["产品名称", "名称", "name", "品名", "商品名称", "产品名", "product name", "product", "Product Name"],
-    "spec_zh": ["产品说明", "规格", "说明", "spec", "description", "产品描述", "描述", "参数", "specification", "product information", "product info"],
-    "color": ["颜色", "色", "color", "色彩"],
-    "package": ["包装", "package", "包装规格", "规格包装"],
-    "price_rmb": ["价格", "售价", "price", "人民币", "单价", "价", "价格人民币", "价格(人民币)", "rmb", "cny"],
-    "price_usd": ["美元", "usd", "dollar", "price usd", "价格美元", "价格(美元)", "美金", "us dollar", "Price($)", "price", "unit price"],
-    "image": ["图片", "照片", "image", "photo", "产品图片", "产品照片", "图片路径", "Picture", "image path"],
-}
-
 # Supported image extensions
 IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"]
 
@@ -373,8 +434,8 @@ def fix_encoding(text) -> str:
 
 
 def _find_column(df_columns: list, target_field: str) -> Optional[str]:
-    """Find the best matching column name for a target field."""
-    keywords = COLUMN_KEYWORDS.get(target_field, [])
+    """Find the best matching column name for a target field using COLUMN_CONFIG."""
+    keywords = get_field_keywords(target_field)
     for col in df_columns:
         if not isinstance(col, str):
             continue
