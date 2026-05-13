@@ -36,7 +36,7 @@ python -m venv venv
 
 `backend/main.py` 通过 sys.path 添加了 `product_tool/src/` 和 `product_tool/`，
 所以 `from src.company import ...` 实际解析到 `product_tool/src/company.py`。
-根目录 `src/` 是旧版残留，未使用。
+根目录 `src/` 由 CLI 入口（`run.py`、`app.py` 等）使用。与 `product_tool/src/` 模块名完全不重叠，两者共存。
 
 ## 数据库
 
