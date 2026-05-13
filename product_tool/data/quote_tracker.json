@@ -1,0 +1,36 @@
+[
+  {
+    "quote_id": "FC12D124",
+    "access_key": "bebe812a559d",
+    "product_ids": [
+      1,
+      2,
+      3
+    ],
+    "customer_name": "Test Customer",
+    "customer_email": "test@example.com",
+    "notes": "测试报价",
+    "created_at": "2026-05-01T20:20:21.333654",
+    "expires_at": 1780230021.333674,
+    "view_count": 0,
+    "last_viewed": null,
+    "view_history": []
+  },
+  {
+    "quote_id": "3435D5E0",
+    "access_key": "5003d4efff17",
+    "product_ids": [
+      1,
+      2,
+      3
+    ],
+    "customer_name": "Uganda Buyer",
+    "customer_email": "buyer@uganda.com",
+    "notes": "Interested in electric bikes",
+    "created_at": "2026-05-01T21:13:11.036180",
+    "expires_at": 1780233191.036218,
+    "view_count": 0,
+    "last_viewed": null,
+    "view_history": []
+  }
+]

@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.venv/
+.pytest_cache/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+logs/
+*.log
+
+# Temp & generated
+temp_images/
+src/temp_images/
+output/
+*.txt
+test_*.xlsx
+*.db
+
+# OS
+.DS_Store
+Thumbs.db

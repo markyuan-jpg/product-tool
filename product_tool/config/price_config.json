@@ -1,0 +1,55 @@
+{
+  "default_industry": "ev",
+  "industry_detection": {
+    "rules": [
+      {"pattern": "\\bev\\b|电动车|电动|electric", "industry": "ev"},
+      {"pattern": "medical|医疗|医疗器械|医药", "industry": "medical"}
+    ]
+  },
+  "industries": {
+    "ev": {
+      "primary_keywords": [
+        "整车价格", "EV", "出厂价格", "裸车价格",
+        "裸车价", "CKD散件价格", "CKD", "unit price",
+        "整车", "complete vehicle", "EXW PRICE",
+        "价格"
+      ],
+      "secondary_keywords": [
+        {"type": "battery",      "keywords": ["电池", "battery", "锂电池", "铅酸电池", "磷酸铁锂", "锂电"],   "label": "Battery Price"},
+        {"type": "charger",      "keywords": ["充电器", "charger"],                                            "label": "Charger Price"},
+        {"type": "packing",      "keywords": ["包装", "packing", "packaging", "包装费"],                        "label": "Packing Fee"},
+        {"type": "freight",      "keywords": ["运费", "freight", "shipping", "海运"],                           "label": "Freight"},
+        {"type": "controller",   "keywords": ["控制器", "controller"],                                          "label": "Controller Price"},
+        {"type": "motor",        "keywords": ["电机", "motor", "马达"],                                         "label": "Motor Price"},
+        {"type": "accessory",    "keywords": ["配件", "accessory", "附件"],                                      "label": "Accessory Price"},
+        {"type": "insurance",    "keywords": ["保险", "insurance"],                                             "label": "Insurance"}
+      ],
+      "price_detection": {
+        "main_price_keywords": ["价格", "price", "出厂价", "裸车价", "总价", "CKD", "exw"],
+        "main_price_priority": "largest",
+        "value_range": {"cny": [0.01, 999999], "usd": [0.01, 99999]},
+        "secondary_price_keywords": ["电池", "充电器", "运费", "保险", "包装"]
+      }
+    },
+    "medical": {
+      "primary_keywords": ["单价", "unit price", "price", "价格", "售价", "报价"],
+      "secondary_keywords": [],
+      "price_detection": {
+        "main_price_keywords": ["价格", "price", "单价"],
+        "main_price_priority": "first",
+        "value_range": {"cny": [0.01, 9999999], "usd": [0.01, 999999]},
+        "secondary_price_keywords": []
+      }
+    },
+    "general": {
+      "primary_keywords": ["price", "价格", "单价", "总价", "unit price"],
+      "secondary_keywords": [],
+      "price_detection": {
+        "main_price_keywords": ["price", "价格", "单价", "总价"],
+        "main_price_priority": "first",
+        "value_range": {"cny": [0.01, 999999], "usd": [0.01, 99999]},
+        "secondary_price_keywords": []
+      }
+    }
+  }
+}

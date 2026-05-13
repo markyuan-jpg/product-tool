@@ -1,0 +1,22 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+venv/
+.venv/
+
+# Generated data
+*.db
+outputs/
+uploads/
+
+# Cache
+column_cache.json
+
+# OS
+.DS_Store
+Thumbs.db
