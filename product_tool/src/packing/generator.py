@@ -557,7 +557,7 @@ def generate_commercial_invoice(
 
             ws.cell(row,ci).value=v; ws.cell(row,ci).font=FONT_NORMAL; ws.cell(row,ci).border=BORDER
 
-            ws.cell(row,ci).alignment=ALIGN_CENTER if ci<=2 else ALIGN_RIGHT
+            ws.cell(row,ci).alignment=ALIGN_LEFT if ci in (2,3) else ALIGN_RIGHT if ci>3 else ALIGN_CENTER
 
         if i%2==0:
 

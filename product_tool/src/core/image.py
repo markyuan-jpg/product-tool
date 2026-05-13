@@ -23,8 +23,13 @@ TEMP_IMAGE_FOLDER = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname
 
 MAX_IMAGE_WIDTH = 1200
 JPEG_QUALITY = 95
+_resize_cache = {}
 
 def resize_image(path: str, max_w: int = MAX_IMAGE_WIDTH, quality: int = JPEG_QUALITY) -> Union[io.BytesIO, str]:
+    global _resize_cache
+    key = (path, max_w, quality)
+    if key in _resize_cache:
+        return _resize_cache[key]
     """压缩大图到指定宽度，保留原格式。宽 <= max_w 的图片原样返回。
     
     Args:
@@ -56,6 +61,7 @@ def resize_image(path: str, max_w: int = MAX_IMAGE_WIDTH, quality: int = JPEG_QU
     save_kw = {'format': fmt, 'quality': quality} if fmt == 'JPEG' else {'format': fmt}
     img.save(buf, **save_kw)
     buf.seek(0)
+    _resize_cache[key] = buf
     return buf
 
 DRAWING_NS = {

@@ -358,8 +358,6 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
     const colEmpty = {model:'',spec:'',qty:1,price:0,price_cny:0,photo:'',nw:0,gw:0,ctn:'',cbm:0,upc:0};
     sel.forEach(item => { Object.entries(colMap).forEach(([key, fields]) => { if (!selectedColumns.has(key)) fields.forEach(f => { item[f] = colEmpty[key]; }); }); });
     setExportLoading(true);
-    const ac = new AbortController();
-    const tid = setTimeout(() => ac.abort(), 60000);
     try {
       const b = new URLSearchParams();
       b.append('products', JSON.stringify(sel));
@@ -412,18 +410,17 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
       else if (exportType === 'pi') { url = API_BASE + '/api/pi'; filename = '形式发票_' + ts + '.xlsx'; }
 
       const r = await fetch(url, {
-        method: 'POST', body: b, signal: ac.signal,
+        method: 'POST', body: b,
         headers: { 'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/x-www-form-urlencoded' }
       });
-      clearTimeout(tid);
       if (!r.ok) throw new Error('生成失败');
       const blob = await r.blob();
       const dlUrl = URL.createObjectURL(blob);
-      window.open(dlUrl, '_blank');
+      const a = document.createElement('a'); a.href = dlUrl; a.download = filename; a.click();
       setTimeout(() => URL.revokeObjectURL(dlUrl), 5000);
       fetchProducts();
       if (onQuotationGenerated) onQuotationGenerated();
-    } catch (err) { clearTimeout(tid); alert('生成失败：' + friendlyError(err)); }
+    } catch (err) { alert('生成失败：' + friendlyError(err)); }
     finally { setExportLoading(false); }
   };
 
@@ -441,8 +438,6 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
     const colEmpty = {model:'',spec:'',qty:1,price:0,price_cny:0,photo:'',nw:0,gw:0,ctn:'',cbm:0,upc:0};
     sel.forEach(item => { Object.entries(colMap).forEach(([key, fields]) => { if (!selectedColumns.has(key)) fields.forEach(f => { item[f] = colEmpty[key]; }); }); });
     setExportLoading(true);
-    const acAll = new AbortController();
-    const tidAll = setTimeout(() => acAll.abort(), 120000);
     try {
       const ts = Date.now();
       const common = () => {
@@ -467,83 +462,41 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
         b.append('packing_qty', packingQty);
         return b;
       };
-      // 各接口按需拼装参数
       const tasks = [
-        {
-          url: API_BASE + '/api/quotation',
-          name: '报价单_' + ts + '.xlsx',
-          build: () => { const b = common(); b.append('payment_terms', piPaymentTerms); b.append('currency', piCurrency); return b; }
-        },
-        {
-          url: API_BASE + '/api/quotation/pdf',
-          name: '报价单PDF_' + ts + '.pdf',
-          build: () => { const b = common(); b.append('payment_terms', piPaymentTerms); b.append('currency', piCurrency); return b; }
-        },
-        {
-          url: API_BASE + '/api/pi',
-          name: '形式发票_' + ts + '.xlsx',
-          build: () => {
-            const b = common();
-            b.append('payment_terms', piPaymentTerms);
-            b.append('currency', piCurrency);
-            b.append('port_destination', piPort);
-            b.append('brand_name', piBrand);
-            try {
-              const bank = JSON.parse(localStorage.getItem('bank_info') || '{}');
-              if (bank.beneficiary) b.append('bank_beneficiary', bank.beneficiary);
-              if (bank.bank_name) b.append('bank_name', bank.bank_name);
-              if (bank.bank_address) b.append('bank_address', bank.bank_address);
-              if (bank.account_no) b.append('bank_account', bank.account_no);
-              if (bank.swift_code) b.append('bank_swift', bank.swift_code);
-            } catch (e) {}
-            return b;
-          }
-        },
-        {
-          url: API_BASE + '/api/packing',
-          name: '装箱单_' + ts + '.xlsx',
-          build: () => { return common(); }
-        },
-        {
-          url: API_BASE + '/api/invoice',
-          name: '商业发票_' + ts + '.xlsx',
-          build: () => {
-            const b = common();
-            b.append('payment_terms', piPaymentTerms);
-            b.append('currency', piCurrency);
-            try {
-              const bank = JSON.parse(localStorage.getItem('bank_info') || '{}');
-              if (bank.beneficiary) b.append('bank_beneficiary', bank.beneficiary);
-              if (bank.bank_name) b.append('bank_name', bank.bank_name);
-              if (bank.bank_address) b.append('bank_address', bank.bank_address);
-              if (bank.account_no) b.append('bank_account', bank.account_no);
-              if (bank.swift_code) b.append('bank_swift', bank.swift_code);
-            } catch (e) {}
-            return b;
-          }
-        },
+        { url: API_BASE + '/api/quotation', name: '报价单_' + ts + '.xlsx',
+          build: () => { const b = common(); b.append('payment_terms', piPaymentTerms); b.append('currency', piCurrency); return b; } },
+        { url: API_BASE + '/api/quotation/pdf', name: '报价单PDF_' + ts + '.pdf',
+          build: () => { const b = common(); b.append('payment_terms', piPaymentTerms); b.append('currency', piCurrency); return b; } },
+        { url: API_BASE + '/api/pi', name: '形式发票_' + ts + '.xlsx',
+          build: () => { const b = common(); b.append('payment_terms', piPaymentTerms); b.append('currency', piCurrency); b.append('port_destination', piPort); b.append('brand_name', piBrand); return b; } },
+        { url: API_BASE + '/api/packing', name: '装箱单_' + ts + '.xlsx',
+          build: () => { return common(); } },
+        { url: API_BASE + '/api/invoice', name: '商业发票_' + ts + '.xlsx',
+          build: () => { const b = common(); b.append('payment_terms', piPaymentTerms); b.append('currency', piCurrency); return b; } },
       ];
-      // 全部请求并行发出（120秒超时）
-      const results = await Promise.allSettled(tasks.map(t =>
-        fetch(t.url, {
-          method: 'POST', body: t.build(), signal: acAll.signal,
-          headers: { 'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/x-www-form-urlencoded' }
-        }).then(async r => {
-          if (r.ok) return { blob: await r.blob(), name: t.name };
-          return null;
-        }).catch(() => null)
-      ));
-      clearTimeout(tidAll);
-      const downloads = results.filter(r => r && r.value).map(r => r.value);
-      // 逐个触发下载，间隔 500ms
-      for (let i = 0; i < downloads.length; i++) {
+      // 串行请求，逐个下载
+      const downloads = [];
+      for (const t of tasks) {
+        try {
+          const r = await fetch(t.url, {
+            method: 'POST', body: t.build(),
+            headers: { 'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/x-www-form-urlencoded' }
+          });
+          if (r.ok) {
+            const blob = await r.blob();
+            downloads.push({ blob, name: t.name });
+          }
+        } catch (e) { /* 单个失败不影响其他 */ }
+      }
+      // 逐个触发下载
+      for (const item of downloads) {
         await new Promise(r => setTimeout(r, 500));
-        const url = URL.createObjectURL(downloads[i].blob);
-        window.open(url, '_blank');
+        const url = URL.createObjectURL(item.blob);
+        const a = document.createElement('a'); a.href = url; a.download = item.name; a.click();
         setTimeout(() => URL.revokeObjectURL(url), 5000);
       }
       if (onQuotationGenerated) onQuotationGenerated();
-    } catch (err) { clearTimeout(tidAll); alert('一键生成失败：' + friendlyError(err)); }
+    } catch (err) { alert('一键生成失败：' + friendlyError(err)); }
     finally { setExportLoading(false); }
   };
 

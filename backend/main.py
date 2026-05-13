@@ -1659,8 +1659,6 @@ async def generate_quotation(
     media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 
     filename=f"报价单_{ts}.xlsx",
-
-    headers={"X-Quotation-Id": str(quotation_id)} if quotation_id else None,
     )
 
 
@@ -1802,6 +1800,7 @@ async def generate_quotation_pdf(
 
         raise HTTPException(500, "PDF 报价单生成失败")
 
+    pdf_qid = None
     try:
 
         if user:
@@ -1812,7 +1811,9 @@ async def generate_quotation_pdf(
 
                 [str(user.id), json.dumps(items), f"报价单PDF_{ts}.pdf", str(output_path)])
 
-            conn.commit(); conn.close()
+            conn.commit()
+            pdf_qid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.close()
 
     except Exception as e:
 
@@ -1923,6 +1924,7 @@ async def generate_pi(
 
         raise HTTPException(500, "形式发票生成失败")
 
+    pi_qid = None
     try:
 
         if user:
@@ -1933,7 +1935,9 @@ async def generate_pi(
 
                 [str(user.id), json.dumps(items), f"形式发票_{ts}.xlsx", str(result_path)])
 
-            conn.commit(); conn.close()
+            conn.commit()
+            pi_qid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.close()
 
     except Exception as e:
 
@@ -2018,6 +2022,7 @@ async def generate_packing(
 
         raise HTTPException(500, "装箱单生成失败")
 
+    pk_qid = None
     try:
 
         if _pro_user:
@@ -2028,7 +2033,9 @@ async def generate_packing(
 
                 [str(_pro_user.id), json.dumps(items), f"装箱单_{ts}.xlsx", str(result_path)])
 
-            conn.commit(); conn.close()
+            conn.commit()
+            pk_qid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.close()
 
     except Exception as e:
 
@@ -2132,6 +2139,7 @@ async def generate_invoice(
 
         raise HTTPException(500, "商业发票生成失败")
 
+    inv_qid = None
     try:
 
         if _pro_user:
@@ -2142,7 +2150,9 @@ async def generate_invoice(
 
                 [str(_pro_user.id), json.dumps(items), f"商业发票_{ts}.xlsx", str(result_path)])
 
-            conn.commit(); conn.close()
+            conn.commit()
+            inv_qid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.close()
 
     except Exception as e:
 
