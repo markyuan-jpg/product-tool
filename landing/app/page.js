@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import API_BASE from '@/lib/api';
-import { isLoggedIn, getStoredUser } from '@/lib/auth';
+import { isLoggedIn, getStoredUser, getToken } from '@/lib/auth';
 import { friendlyError } from '@/lib/errors';
 import Nav from '@/components/Nav';
 import Footer from '@/components/Footer';
@@ -93,10 +93,27 @@ export default function Home() {
       if (companyPhone) b.append('company_phone', companyPhone);
       const r = await fetch(API_BASE + '/api/quotation', { method: 'POST', body: b });
       if (!r.ok) throw new Error('生成失败');
-      const blob = await r.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = url; a.download = '报价单_' + Date.now() + '.xlsx'; a.click();
-      URL.revokeObjectURL(url);
+      const ct = r.headers.get('content-type') || '';
+      if (ct.includes('json')) {
+        const data = await r.json();
+        if (data.id) {
+          const token = getToken();
+          const dlR = await fetch(API_BASE + '/api/quotations/' + data.id + '/download', {
+            headers: token ? { 'Authorization': 'Bearer ' + token } : {}
+          });
+          if (dlR.ok) {
+            const blob = await dlR.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = data.name || '报价单_' + Date.now() + '.xlsx'; a.click();
+            URL.revokeObjectURL(url);
+          }
+        }
+      } else {
+        const blob = await r.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = '报价单_' + Date.now() + '.xlsx'; a.click();
+        URL.revokeObjectURL(url);
+      }
     } catch (err) { alert('生成报价单失败：' + friendlyError(err)); }
     setGenerating(false);
   };

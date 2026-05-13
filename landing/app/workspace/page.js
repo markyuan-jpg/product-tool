@@ -414,10 +414,26 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
         headers: { 'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/x-www-form-urlencoded' }
       });
       if (!r.ok) throw new Error('生成失败');
-      const blob = await r.blob();
-      const dlUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = dlUrl; a.download = filename; a.click();
-      setTimeout(() => URL.revokeObjectURL(dlUrl), 5000);
+      const ct = r.headers.get('content-type') || '';
+      if (ct.includes('json')) {
+        const data = await r.json();
+        if (data.id) {
+          const dlR = await fetch(API_BASE + '/api/quotations/' + data.id + '/download', {
+            headers: { 'Authorization': 'Bearer ' + getToken() }
+          });
+          if (dlR.ok) {
+            const blob = await dlR.blob();
+            const dlUrl = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = dlUrl; a.download = data.name || filename; a.click();
+            setTimeout(() => URL.revokeObjectURL(dlUrl), 5000);
+          }
+        }
+      } else {
+        const blob = await r.blob();
+        const dlUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = dlUrl; a.download = filename; a.click();
+        setTimeout(() => URL.revokeObjectURL(dlUrl), 5000);
+      }
       fetchProducts();
       if (onQuotationGenerated) onQuotationGenerated();
     } catch (err) { alert('生成失败：' + friendlyError(err)); }
@@ -483,17 +499,37 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
             headers: { 'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/x-www-form-urlencoded' }
           });
           if (r.ok) {
-            const blob = await r.blob();
-            downloads.push({ blob, name: t.name });
+            const ct = r.headers.get('content-type') || '';
+            if (ct.includes('json')) {
+              const data = await r.json();
+              if (data.id) downloads.push({ id: data.id, name: data.name || t.name });
+            } else {
+              const blob = await r.blob();
+              downloads.push({ blob, name: t.name });
+            }
           }
         } catch (e) { /* 单个失败不影响其他 */ }
       }
       // 逐个触发下载
       for (const item of downloads) {
         await new Promise(r => setTimeout(r, 500));
-        const url = URL.createObjectURL(item.blob);
-        const a = document.createElement('a'); a.href = url; a.download = item.name; a.click();
-        setTimeout(() => URL.revokeObjectURL(url), 5000);
+        if (item.id) {
+          try {
+            const dlR = await fetch(API_BASE + '/api/quotations/' + item.id + '/download', {
+              headers: { 'Authorization': 'Bearer ' + getToken() }
+            });
+            if (dlR.ok) {
+              const blob = await dlR.blob();
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a'); a.href = url; a.download = item.name; a.click();
+              setTimeout(() => URL.revokeObjectURL(url), 5000);
+            }
+          } catch (e) { /* 单个下载失败不影响其他 */ }
+        } else if (item.blob) {
+          const url = URL.createObjectURL(item.blob);
+          const a = document.createElement('a'); a.href = url; a.download = item.name; a.click();
+          setTimeout(() => URL.revokeObjectURL(url), 5000);
+        }
       }
       if (onQuotationGenerated) onQuotationGenerated();
     } catch (err) { alert('一键生成失败：' + friendlyError(err)); }

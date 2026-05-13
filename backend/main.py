@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import os, sys, json, re, logging
-
+from contextlib import asynccontextmanager
 from datetime import datetime
 
 from pathlib import Path
@@ -71,7 +71,18 @@ from universal_parser import detect_header_row, parse_with_colmap, score_result
 from ai_parser import load_cache, save_cache, ai_detect_columns, get_cache_key as ai_cache_key
 
 
-app = FastAPI(title="报价整合工具 API", version="1.0.0", max_upload_size=100_000_000)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup: initialize DB tables. Shutdown: no-op."""
+    try:
+        from database import init_db as _init
+        await _init()
+        logger.info("Database tables created/verified")
+    except Exception as e:
+        logger.error(f"Database init on startup failed: {e}")
+    yield
+
+app = FastAPI(title="报价整合工具 API", version="1.0.0", max_upload_size=100_000_000, lifespan=lifespan)
 
 
 #  统一上传大小限制 
@@ -151,18 +162,6 @@ starlette.datastructures.MAX_MEMORY_SIZE = 100_000_000  # 100MB for form fields
 
 
 # Initialize DBs on startup (fail gracefully if PostgreSQL unavailable)
-
-from database import init_db as pg_init_db
-# Ensure database tables exist (run on startup)
-@app.on_event("startup")
-async def startup_db():
-    try:
-        from database import init_db as _init
-        await _init()
-        logger.info("Database tables created/verified")
-    except Exception as e:
-        logger.error(f"Database init on startup failed: {e}")
-
 
 app.add_middleware(
     CORSMiddleware,
@@ -1653,12 +1652,12 @@ async def generate_quotation(
         logger.warning("报价auto-save 失败: %s", e) 
 
 
+    if quotation_id:
+        return {"status": "ok", "id": quotation_id, "name": f"报价单_{ts}.xlsx"}
     return FileResponse(
         str(output_path), 
-
-    media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-
-    filename=f"报价单_{ts}.xlsx",
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename=f"报价单_{ts}.xlsx",
     )
 
 
@@ -1819,6 +1818,8 @@ async def generate_quotation_pdf(
 
         logger.warning("PDF报价auto-save 失败: %s", e)
 
+    if pdf_qid:
+        return {"status": "ok", "id": pdf_qid, "name": f"报价单PDF_{ts}.pdf"}
     return FileResponse(str(output_path), media_type="application/pdf", filename=f"报价单_{ts}.pdf")
 
 
@@ -1943,6 +1944,8 @@ async def generate_pi(
 
         logger.warning("PI auto-save 失败: %s", e)
 
+    if pi_qid:
+        return {"status": "ok", "id": pi_qid, "name": f"形式发票_{ts}.xlsx"}
     return FileResponse(str(result_path), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename=f"形式发票_{ts}.xlsx") 
 
 
@@ -2041,6 +2044,8 @@ async def generate_packing(
 
         logger.warning("装箱单auto-save 失败: %s", e)
 
+    if pk_qid:
+        return {"status": "ok", "id": pk_qid, "name": f"装箱单_{ts}.xlsx"}
     return FileResponse(result_path, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename=f"装箱单_{ts}.xlsx")
 
 
@@ -2158,6 +2163,8 @@ async def generate_invoice(
 
         logger.warning("商业发票 auto-save 失败: %s", e)
 
+    if inv_qid:
+        return {"status": "ok", "id": inv_qid, "name": f"商业发票_{ts}.xlsx"}
     return FileResponse(result_path, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename=f"商业发票_{ts}.xlsx")
 
 

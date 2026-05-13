@@ -1,0 +1,40 @@
+# Auto-detect text files and normalize line endings
+* text=auto
+
+# Python source: LF on all platforms
+*.py text eol=lf
+
+# JS/JSX/TS/TSX: LF on all platforms
+*.js text eol=lf
+*.jsx text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+
+# Batch files: CRLF (required by Windows cmd)
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Shell scripts: LF (required by Unix shells)
+*.sh text eol=lf
+
+# Config files: LF
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.md text eol=lf
+*.toml text eol=lf
+*.ini text eol=lf
+*.cfg text eol=lf
+
+# Binary files - do not touch
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.xlsx binary
+*.xls binary
+*.docx binary
+*.db binary
+*.pyc binary
