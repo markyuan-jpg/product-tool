@@ -1,0 +1,5 @@
+{
+  "backend": "libretranslate",
+  "url": "https://libretranslate.com",
+  "api_key": "YOUR_API_KEY_HERE"
+}
