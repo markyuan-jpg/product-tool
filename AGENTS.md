@@ -58,3 +58,41 @@ Pro 升级返回 502。如需启用，在 `backend/.env` 中配置。
 然后用 `backend/score.py` 的 **信号组合评分系统** 对两个结果评分，分高者胜。
 评分维度：逐产品 7 级信号组合（真型号+价格+参数→+7） + 全局一致性加成。
 不再使用旧的数量比较逻辑（谁产品多选谁）。
+
+## 部署生产
+
+### Railway（后端，backend/）
+
+```bash
+# 1. railway.app 创建项目 → GitHub repo → Service 选 backend/
+# 2. 设置环境变量（必填）:
+#    JWT_SECRET_KEY    — 生成: python -c "import secrets; print(secrets.token_hex(32))"
+#    DATABASE_URL       — PostgreSQL 连接串
+#    BASE_URL           — Vercel 前端域名，如 https://xxx.vercel.app
+# 3. (可选) CREEM_API_KEY / CREEM_WEBHOOK_SECRET / CREEM_PRODUCT_ID_PRO
+# 4. (可选) GEMINI_API_KEY / USE_DOCLING
+# 5. Railway 自动检测 railway.json，部署即可
+```
+
+### Vercel（前端，landing/）
+
+```bash
+# 1. vercel.com 创建项目，Framework Preset → Next.js，Root Directory → landing/
+# 2. 设置环境变量:
+#    NEXT_PUBLIC_API_URL=https://你的railway域名.up.railway.app
+# 3. Vercel 自动检测 vercel.json，部署即可
+```
+
+### 环境变量总表
+
+| 平台 | 变量 | 必填 | 说明 |
+|------|------|------|------|
+| Railway | `JWT_SECRET_KEY` | ✅ | JWT 签名密钥 |
+| Railway | `DATABASE_URL` | ✅ | PostgreSQL 连接串 |
+| Railway | `BASE_URL` | ✅ | Vercel 前端域名（CORS 白名单） |
+| Railway | `CREEM_API_KEY` | 可选 | Creem 支付 |
+| Railway | `CREEM_WEBHOOK_SECRET` | 可选 | Creem Webhook 签名 |
+| Railway | `CREEM_PRODUCT_ID_PRO` | 可选 | Creem 产品 ID |
+| Railway | `GEMINI_API_KEY` | 可选 | AI 列检测 |
+| Railway | `USE_DOCLING` | 可选 | Docling 后备解析 |
+| Vercel | `NEXT_PUBLIC_API_URL` | ✅ | Railway 后端域名 |

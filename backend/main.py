@@ -168,9 +168,19 @@ starlette.datastructures.MAX_MEMORY_SIZE = 100_000_000  # 100MB for form fields
 
 # Initialize DBs on startup (fail gracefully if PostgreSQL unavailable)
 
+BASE_URL = os.getenv("BASE_URL", "")
+CORS_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:8000",
+    "http://localhost:8000",
+]
+if BASE_URL:
+    CORS_ORIGINS.append(BASE_URL)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://127.0.0.1:8000", "http://localhost:8000"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -182,9 +192,11 @@ app.add_middleware(
 async def cors_error_handler(request, exc):
     from fastapi.responses import JSONResponse
     from starlette.middleware.cors import CORSMiddleware as _CORS
-    # 手动添加CORS头
+    # 手动添加CORS头（从请求Origin匹配或取生产域名）
+    origin = request.headers.get("origin", "")
+    allowed = origin if origin in CORS_ORIGINS else CORS_ORIGINS[-1]
     headers = {
-        "Access-Control-Allow-Origin": "http://localhost:3000",
+        "Access-Control-Allow-Origin": allowed,
         "Access-Control-Allow-Credentials": "true",
         "Access-Control-Allow-Methods": "*",
         "Access-Control-Allow-Headers": "*",
