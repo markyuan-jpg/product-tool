@@ -1,13 +1,11 @@
 {
   "build": {
-    "command": "pip install -r backend/requirements.txt",
     "watchPatterns": ["product_tool/**", "backend/**"]
   },
   "deploy": {
     "startCommand": "cd backend && python -m uvicorn main:app --host 0.0.0.0 --port $PORT",
     "healthcheckPath": "/api/health",
     "restartPolicyType": "always",
-    "restartPolicyMaxRetries": 10,
     "sleepOnIdle": true,
     "idleTimeoutMinutes": 5
   }
