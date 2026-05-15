@@ -91,7 +91,10 @@ export default function Home() {
       if (companyName) b.append('company_name', companyName);
       if (companyContact) b.append('company_contact', companyContact);
       if (companyPhone) b.append('company_phone', companyPhone);
-      const r = await fetch(API_BASE + '/api/quotation', { method: 'POST', body: b });
+      const ac = new AbortController();
+      const tid = setTimeout(() => ac.abort(), 120000);
+      const r = await fetch(API_BASE + '/api/quotation', { method: 'POST', body: b, signal: ac.signal });
+      clearTimeout(tid);
       if (!r.ok) throw new Error('生成失败');
       const ct = r.headers.get('content-type') || '';
       if (ct.includes('json')) {

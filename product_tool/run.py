@@ -173,21 +173,30 @@ def detect_parser_type(file_path: str) -> str:
                     if '车型' in val_str or 'model\nmodel' in val_str.replace(' ', ''):
                         has_table_layout = True
         
-        # 价格表: 列少+有价格+有型号
-        if ws.max_column < 12 and ws.max_row < 30:
-            for r in range(1, min(15, ws.max_row + 1)):
+        # 价格表: 列少+有价格+有型号（不限行数，合同类文件可能超过30行）
+        if ws.max_column < 12:
+            has_price_kw = False
+            has_model_kw = False
+            for r in range(1, min(25, ws.max_row + 1)):
                 for c in range(1, min(15, ws.max_column + 1)):
                     val = ws.cell(r, c).value
                     if val:
                         val_str = str(val).lower()
-                        if 'price' in val_str and 'model' in val_str:
-                            has_price_table = True
+                        if 'price' in val_str:
+                            has_price_kw = True
+                        if 'model' in val_str:
+                            has_model_kw = True
+            if has_price_kw and has_model_kw:
+                has_price_table = True
         
         # 单产品规格
-        if ws.max_row > 10 and ws.max_column < 6:
-            first_col = [ws.cell(r, 1).value for r in range(2, min(12, ws.max_row))]
-            if not any(first_col):
-                has_single = False
+        if ws.max_row > 10:
+            if ws.max_column < 6:
+                first_col = [ws.cell(r, 1).value for r in range(2, min(12, ws.max_row))]
+                if not any(first_col):
+                    has_single = False
+            else:
+                has_single = False  # 列数>=6 → 多产品表（如合同/报价单）
     
     wb.close()
     
@@ -234,6 +243,13 @@ def parse_file(file_path: str, parser_type: str = None, verbose: bool = False) -
         df = parse_invoice(file_path)
     elif parser_type == 'price_table':
         df = parse_price_table(file_path)
+        # 如果 price_table 解析结果不合理（型号不含字母+数字组合），回退到 parse_excel_v3
+        if df is not None and len(df) > 0 and 'model' in df.columns:
+            import re
+            _real_model = lambda m: bool(re.search(r'[A-Za-z]', m) and re.search(r'\d', m))
+            real_models = sum(1 for m in df['model'].astype(str).str.strip() if _real_model(m))
+            if real_models < 2:
+                df = parse_excel_v3(file_path)
     elif parser_type == 'single_spec':
         df = parse_single_spec(file_path)
     elif parser_type == 'table':

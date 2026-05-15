@@ -15,8 +15,22 @@ const inter = Inter({
 });
 
 export const metadata = {
-  title: "报价整合工具 — 上传文件，30秒生成报价单",
-  description: "外贸SOHO报价工具。支持Excel/PDF/Word自动解析，一键生成带图片的报价单、PI、装箱单、商业发票。无需注册，免费体验。",
+  title: "报价整合工具 — Excel/PDF 自动提取产品，一键生成外贸报价单",
+  description: "上传Excel、PDF或Word，自动提取产品型号、规格、价格，30秒生成报价单。支持产品库管理、形式发票PI、装箱单。外贸SOHO免费使用。",
+  openGraph: {
+    title: "报价整合工具",
+    description: "上传Excel/PDF/Word，30秒自动解析出产品规格价格，一键生成外贸报价单",
+    url: "https://quotation-tool.vercel.app",
+    siteName: "报价整合工具",
+    locale: "zh_CN",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "报价整合工具",
+    description: "上传文件，30秒生成报价单",
+  },
+  robots: { index: true, follow: true },
 };
 
 export default function RootLayout({ children }) {

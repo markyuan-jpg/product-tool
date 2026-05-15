@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Nav from '@/components/Nav';
 import Footer from '@/components/Footer';
@@ -64,6 +64,11 @@ const cell = (val) => {
 };
 
 export default function PricingPage() {
+  useEffect(() => {
+    document.title = '定价方案 — 报价整合工具 免费版和专业版';
+    const meta = document.querySelector('meta[name="description"]');
+    if (meta) meta.setAttribute('content', '免费版200个产品，适合个人SOHO。专业版不限数量，解锁全部单据。14天无条件退款。');
+  }, []);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const router = useRouter();
 

@@ -603,12 +603,19 @@ def detect_table_layout(table: List[List[str]]) -> str:
     
     # Look for header row (contains Model/型号 keyword)
     header_row_idx = None
-    model_keywords = ['model', '型号', '产品', 'goods', 'item', 'sku', 'product', '产品名称', '编号']
+    model_keywords = ['model', '型号', '产品', 'item', 'sku', 'product', '产品名称', '编号']
     
     for idx, row in enumerate(table):
-        row_str = ' '.join(str(c or '') for c in row).lower()
-        if any(kw in row_str for kw in model_keywords):
-            header_row_idx = idx
+        # 逐格检查前3列：表头文本通常较短（<40字符），避免spec中的"models:"误匹配
+        for c in row[:3]:
+            cv = str(c or '').strip()
+            if len(cv) > 40:
+                continue  # 长文本不太可能是表头
+            cv_lower = cv.lower()
+            if any(kw in cv_lower for kw in model_keywords):
+                header_row_idx = idx
+                break
+        if header_row_idx is not None:
             break
     
     if header_row_idx is None:
@@ -625,7 +632,9 @@ def detect_table_layout(table: List[List[str]]) -> str:
         if val is not None and val != '':
             first_col.append(val)
     
-    first_row_str = ' '.join(str(c or '') for c in header_row).lower()
+    # 同样逐格检查并限制长度
+    first_row_short = [str(c or '').strip()[:40] for c in header_row[:3]]
+    first_row_str = ' '.join(first_row_short).lower()
     first_col_str = ' '.join(str(c or '') for c in first_col[:5]).lower()
     
     has_model_in_first_row = any(kw in first_row_str for kw in model_keywords)
@@ -677,7 +686,8 @@ def _is_param_name(text: str) -> bool:
                       '产品名称', '产品', '规格', '参数', '报价', '价格']
     t_lower = t.lower()
     # 逐词匹配（处理 "Including Battery Weight 包含电池重量" → 匹配 "including"）
-    words = t_lower.replace(':', ' ').replace('（', '(').split()
+    # 全角冒号（\uff1a）和ASCII冒号都要替换，PDF提取常使用全角符号
+    words = t_lower.replace(':', ' ').replace('\uff1a', ' ').replace('（', '(').split()
     for w in words:
         # 去掉括号后缀
         clean_word = w.split('(')[0].split('（')[0].strip().rstrip(':：）)')
@@ -718,7 +728,7 @@ def extract_products_from_pdf_v2(pdf_path: str) -> Optional[pd.DataFrame]:
         
         # ─── 三策略并行 ───
         candidates = []
-        model_keywords = ['model', '型号', '产品', 'goods', 'item', 'sku', 'product', '产品名称', '编号']
+        model_keywords = ['model', '型号', '产品', 'item', 'sku', 'product', '产品名称', '编号']
         
         # ─── 策略0: KV规格表检测（仅限≤2列表格，优先） ───
         # 检查第一列是否大多是参数名（Motor: Battery: 等）
@@ -855,6 +865,10 @@ def extract_products_from_pdf_v2(pdf_path: str) -> Optional[pd.DataFrame]:
                 packaging = {}
                 price_rmb = 0
                 price_currency = 'CNY'
+                # 检查表头行是否含USD/FOB标记
+                header_val = str(header_row[col_idx] or '').lower() if col_idx < len(header_row) else ''
+                if 'usd' in header_val or '$' in header_val or 'fob' in header_val:
+                    price_currency = 'USD'
                 for row_idx in range(header_row_idx + 1, len(table)):
                     if col_idx >= len(table[row_idx]):
                         continue
@@ -915,6 +929,10 @@ def extract_products_from_pdf_v2(pdf_path: str) -> Optional[pd.DataFrame]:
                                         m = usd_match.group(0).lower()
                                         if any(kw in m for kw in ['usd', '$']):
                                             price_currency = 'USD'
+                                    # 表头已检测到USD/FOB标记则锁定币种
+                                    if any(kw in (str(header_row[col_idx] or '').lower()) 
+                                           for kw in ['usd', 'fob', '$']):
+                                        price_currency = 'USD'
                             except Exception:
                                 pass
                     elif any(kw in key_lower for kw in PACKAGING_KEYS):
@@ -951,7 +969,7 @@ def extract_products_from_pdf_v2(pdf_path: str) -> Optional[pd.DataFrame]:
                 col_str = str(col or '').lower()
                 if 'price' in col_str or '价格' in col_str or '单价' in col_str:
                     price_col_idx = idx
-                    if 'usd' in col_str or '$' in col_str:
+                    if 'usd' in col_str or '$' in col_str or 'fob' in col_str:
                         found_currency = 'USD'
             for row in table[1:]:
                 model_raw = str(row[model_col_idx] or '').strip() if model_col_idx < len(row) else ''

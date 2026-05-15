@@ -179,6 +179,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
   const [exportOpen, setExportOpen] = useState(true);
   const [exportType, setExportType] = useState('quotation');
   const [exportLoading, setExportLoading] = useState(false);
+  const [exportStatus, setExportStatus] = useState('');
   const [productMeta, setProductMeta] = useState({});
   const [batchQty, setBatchQty] = useState('');
 
@@ -216,6 +217,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
   const [deliveryTime, setDeliveryTime] = useState('');
   const [validity, setValidity] = useState('');
   const [exchangeRate, setExchangeRate] = useState('');
+  const [includeImages, setIncludeImages] = useState(true);
   // Column selection defaults - all on
   const columnDefs = [
     { key: 'model', label: '型号/名称' },
@@ -378,6 +380,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
       b.append('buyer_email', piBuyerEmail);
       b.append('packing_type', packingType);
       b.append('packing_qty', packingQty);
+      b.append('with_images', includeImages ? '1' : '0');
 
       if (exportType === 'pi' || exportType === 'invoice') {
         b.append('port_destination', piPort);
@@ -409,10 +412,14 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
       else if (exportType === 'invoice') { url = API_BASE + '/api/invoice'; filename = '商业发票_' + ts + '.xlsx'; }
       else if (exportType === 'pi') { url = API_BASE + '/api/pi'; filename = '形式发票_' + ts + '.xlsx'; }
 
+      setExportStatus('正在生成' + filename + '...');
+      const ac = new AbortController();
+      const tid = setTimeout(() => ac.abort(), 120000);
       const r = await fetch(url, {
-        method: 'POST', body: b,
+        method: 'POST', body: b, signal: ac.signal,
         headers: { 'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/x-www-form-urlencoded' }
       });
+      clearTimeout(tid);
       if (!r.ok) throw new Error('生成失败');
       const ct = r.headers.get('content-type') || '';
       if (ct.includes('json')) {
@@ -437,7 +444,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
       fetchProducts();
       if (onQuotationGenerated) onQuotationGenerated();
     } catch (err) { alert('生成失败：' + friendlyError(err)); }
-    finally { setExportLoading(false); }
+    finally { setExportLoading(false); setExportStatus(''); }
   };
 
   const handleExportAll = async () => {
@@ -476,6 +483,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
         b.append('origin_country', shippingOrigin);
         b.append('packing_type', packingType);
         b.append('packing_qty', packingQty);
+        b.append('with_images', includeImages ? '1' : '0');
         return b;
       };
       const tasks = [
@@ -490,14 +498,20 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
         { url: API_BASE + '/api/invoice', name: '商业发票_' + ts + '.xlsx',
           build: () => { const b = common(); b.append('payment_terms', piPaymentTerms); b.append('currency', piCurrency); return b; } },
       ];
-      // 串行请求，逐个下载
+      // 串行请求，逐个下载（显示进度）
+      const total = tasks.length;
       const downloads = [];
-      for (const t of tasks) {
+      for (let i = 0; i < total; i++) {
+        const t = tasks[i];
+        setExportStatus(`正在生成 ${t.name} (${i+1}/${total})...`);
         try {
+          const ac = new AbortController();
+          const tid2 = setTimeout(() => ac.abort(), 120000);
           const r = await fetch(t.url, {
-            method: 'POST', body: t.build(),
+            method: 'POST', body: t.build(), signal: ac.signal,
             headers: { 'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/x-www-form-urlencoded' }
           });
+          clearTimeout(tid2);
           if (r.ok) {
             const ct = r.headers.get('content-type') || '';
             if (ct.includes('json')) {
@@ -510,6 +524,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
           }
         } catch (e) { /* 单个失败不影响其他 */ }
       }
+      setExportStatus('正在下载文件...');
       // 逐个触发下载
       for (const item of downloads) {
         await new Promise(r => setTimeout(r, 500));
@@ -533,7 +548,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
       }
       if (onQuotationGenerated) onQuotationGenerated();
     } catch (err) { alert('一键生成失败：' + friendlyError(err)); }
-    finally { setExportLoading(false); }
+    finally { setExportLoading(false); setExportStatus(''); }
   };
 
   const totalQty = Array.from(selected).reduce((s, id) => s + getQty(id), 0);
@@ -817,6 +832,11 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
                               {c.label}
                             </label>
                           ))}
+                          <label className="flex items-center gap-1.5 px-2 py-1 rounded border border-[var(--gold)] text-xs cursor-pointer hover:bg-yellow-50"
+                            onClick={() => setIncludeImages(v => !v)}>
+                            <input type="checkbox" checked={includeImages} onChange={() => {}} className="accent-[var(--gold)]" />
+                            🖼 包含产品图片
+                          </label>
                         </div>
                       </ExportSection>
 
@@ -971,6 +991,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
 
                       {/* Export button section */}
                       <div className="flex items-center justify-end gap-3">
+                        {exportStatus && <span className="text-xs text-[var(--text-secondary)]">{exportStatus}</span>}
                         {user?.tier === 'pro' && (
                         <button onClick={handleExportAll} disabled={exportLoading}
                           className="px-6 py-2.5 rounded-lg bg-[var(--gold)] text-white text-sm font-medium hover:bg-[var(--gold)]/90 disabled:opacity-50 cursor-pointer">

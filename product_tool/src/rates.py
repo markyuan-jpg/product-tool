@@ -12,6 +12,8 @@ DEFAULT_RATES = {"USD":1.0,"CNY":7.2,"EUR":0.92,"GBP":0.79,"JPY":149.5,"KRW":132
 CACHE_DIR = Path.home() / ".product_tool"
 CACHE_FILE = CACHE_DIR / "rates_cache.json"
 CACHE_TTL_HOURS = 24
+_rate_cache = None
+_rate_cache_ts = 0.0
 
 def ensure_dir():
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -57,7 +59,12 @@ def fetch_rates(base: str = "USD") -> Dict[str, float]:
     return DEFAULT_RATES.copy()
 
 def get_rate(from_currency: str, to_currency: str = "CNY") -> float:
-    rates = fetch_rates()
+    global _rate_cache, _rate_cache_ts
+    now = time.time()
+    if _rate_cache is None or now - _rate_cache_ts > 3600:
+        _rate_cache = fetch_rates()
+        _rate_cache_ts = now
+    rates = _rate_cache
     from_rate = rates.get(from_currency.upper(), 1.0)
     to_rate = rates.get(to_currency.upper(), 1.0)
     if from_currency.upper() == "USD":

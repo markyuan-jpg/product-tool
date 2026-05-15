@@ -297,18 +297,30 @@ def match_column_fuzzy(header_value) -> str:
         if kw in text:
             return 'price'
     
+    remark_keywords = ['备注', 'remark', 'note', '注释', '说明']
+    for kw in remark_keywords:
+        if kw in text:
+            return 'remark'
+    
     return None
 
 
-def detect_columns(data_rows: List[Dict]) -> Dict[str, int]:
+def detect_columns(data_rows: List[Dict], header_labels: List[str] = None) -> Dict[str, int]:
     if not data_rows:
         return {}
     
     col_map = {}
-    for col_idx, header in enumerate(data_rows[0].keys()):
-        matched_type = match_column_fuzzy(header)
-        if matched_type:
-            col_map[matched_type] = col_idx
+    # 优先使用外部传入的表头文本（如parse_vertical从深层找到的真正表头）
+    if header_labels:
+        for col_idx, label in enumerate(header_labels):
+            matched_type = match_column_fuzzy(str(label))
+            if matched_type:
+                col_map[matched_type] = col_idx
+    else:
+        for col_idx, header in enumerate(data_rows[0].keys()):
+            matched_type = match_column_fuzzy(header)
+            if matched_type:
+                col_map[matched_type] = col_idx
     
     for col_idx in range(len(list(data_rows[0].keys()))):
         values = [row.get(list(row.keys())[col_idx]) for row in data_rows[:20]]
@@ -322,6 +334,8 @@ def detect_columns(data_rows: List[Dict]) -> Dict[str, int]:
             col_map['spec'] = col_idx
         if 'name' not in col_map and scores.get('name', 0) > 0.4:
             col_map['name'] = col_idx
+        if 'remark' not in col_map and scores.get('remark', 0) > 0.4:
+            col_map['remark'] = col_idx
     
     return col_map
 
@@ -561,13 +575,41 @@ def parse_price_list(ws) -> pd.DataFrame:
 def parse_vertical(ws, images_by_row: Dict[int, str] = None) -> pd.DataFrame:
     """标准纵向解析"""
     all_rows = []
+    
+    # 如果第1行不是表头（不含model/price等关键词），扫描前30行找真正的表头
+    row1_text = ' '.join(str(ws.cell(1, c).value or '') for c in range(1, min(10, ws.max_column + 1))).lower()
+    has_header_kw = any(kw in row1_text for kw in ['model', '型号', 'price', '价格', 'spec', '规格', 'description'])
+    
+    data_start = 2
+    data_end = min(ws.max_row + 1, 2000)
     headers = []
     
-    for c in range(1, ws.max_column + 1):
-        val = ws.cell(1, c).value
-        headers.append(str(val) if val else f'col_{c}')
+    if not has_header_kw:
+        # 搜索包含 model+price 关键词的表头行（合同/报价单类文件）
+        for r in range(2, min(ws.max_row + 1, 35)):
+            row_text = ' '.join(str(ws.cell(r, c).value or '') for c in range(1, min(10, ws.max_column + 1))).lower()
+            has_m = 'model' in row_text or '型号' in row_text
+            has_p = 'price' in row_text or '金额' in row_text or '价格' in row_text or '数量' in row_text
+            if has_m or has_p:
+                # 找到表头行，取它下面的行作为数据
+                data_start = r + 1
+                # 用它做表头列名
+                for c in range(1, ws.max_column + 1):
+                    headers.append(str(ws.cell(r, c).value or f'col_{c}'))
+                # 找表尾（total/amount 行）
+                for end_r in range(data_start, min(ws.max_row + 1, 200)):
+                    end_val = str(ws.cell(end_r, 1).value or '').lower().strip()
+                    if 'total' in end_val or 'subtotal' in end_val:
+                        data_end = end_r
+                        break
+                break
     
-    for r in range(2, min(ws.max_row + 1, 2000)):
+    if not headers:
+        for c in range(1, ws.max_column + 1):
+            val = ws.cell(1, c).value
+            headers.append(str(val) if val else f'col_{c}')
+    
+    for r in range(data_start, data_end):
         row_data = {}
         has_data = False
         for c in range(1, len(headers) + 1):
@@ -578,10 +620,22 @@ def parse_vertical(ws, images_by_row: Dict[int, str] = None) -> pd.DataFrame:
         if has_data:
             all_rows.append(row_data)
     
+    # 收集底部备注（data_end 之后的行）
+    footer_remark = ''
+    if data_end < ws.max_row:
+        footer_parts = []
+        for fr in range(data_end, min(ws.max_row + 1, data_end + 30)):
+            fv = str(ws.cell(fr, 1).value or '').strip()
+            if fv:
+                footer_parts.append(fv)
+        if footer_parts:
+            footer_remark = '\n'.join(footer_parts)
+    
     if not all_rows:
         return pd.DataFrame()
     
-    col_map = detect_columns(all_rows)
+    # 如果找到了深层表头，传入表头文本帮助列检测
+    col_map = detect_columns(all_rows, header_labels=headers if not has_header_kw else None)
     
     def _col_key(idx):
         return f'col_{idx + 1}' if isinstance(idx, int) else idx
@@ -591,6 +645,7 @@ def parse_vertical(ws, images_by_row: Dict[int, str] = None) -> pd.DataFrame:
     name_col = _col_key(col_map.get('name', 'col_3'))
     spec_col = _col_key(col_map.get('spec', 'col_4'))
     price_col = _col_key(col_map.get('price')) if col_map.get('price') is not None else None
+    remark_col = _col_key(col_map.get('remark')) if col_map.get('remark') is not None else None
     
     for row in all_rows:
         model = row.get(model_col)
@@ -608,8 +663,13 @@ def parse_vertical(ws, images_by_row: Dict[int, str] = None) -> pd.DataFrame:
         spec_parts = []
         if spec:
             spec_parts.append(str(spec))
+        # 提取备注
+        remark_val = ''
+        if remark_col:
+            remark_val = str(row.get(remark_col, '') or '').strip()
+        
         for col_name, col_value in row.items():
-            if col_name not in [model_col, name_col, spec_col, price_col]:
+            if col_name not in [model_col, name_col, spec_col, price_col, remark_col]:
                 if col_value and str(col_value).strip():
                     if str(col_value).strip() not in [str(spec) if spec else '', str(name) if name else '', str(model) if model else '']:
                         spec_parts.append(str(col_value).strip())
@@ -619,16 +679,54 @@ def parse_vertical(ws, images_by_row: Dict[int, str] = None) -> pd.DataFrame:
             'name_zh': str(name).strip() if name else '',
             'spec_zh': '\n'.join(spec_parts) if spec_parts else '',
             'price_rmb': price_val,
+            'remark': remark_val,
             'image_path': images_by_row.get(r, '') if images_by_row else '',
             '_row': r,
             '_sheet': ws.title,
         })
     
-    return pd.DataFrame(result)
+    # 后处理：过滤空行 + 型号截断
+    filtered = []
+    for row in result:
+        model_raw = row.get('model', '').strip()
+        price = row.get('price_rmb')
+        has_model = bool(model_raw) and len(model_raw) >= 2
+        has_price = price is not None and (isinstance(price, (int, float)) and price > 0)
+        if not has_model and not has_price:
+            continue  # 无型号无价格 → 非产品行
+        if has_model:
+            # 型号截断：只取换行前的第一段，最长30字符
+            row['model'] = model_raw.split('\n')[0].strip()[:30]
+        # 底部备注填充到没有备注的产品
+        if footer_remark and not row.get('remark'):
+            row['remark'] = footer_remark
+        filtered.append(row)
+    
+    # 分数过滤：单行评分 < -1 的噪音行删除
+    def _score_row(model, price, spec_zh):
+        """内联评分，避免跨模块导入依赖"""
+        import re as _re
+        m = str(model).strip() if model else ''
+        p = price if isinstance(price, (int, float)) else None
+        has_price = p is not None and p > 0
+        is_empty = not m or len(m) < 2
+        is_real = (2 <= len(m) <= 30 and bool(_re.search(r'[A-Za-z]', m))
+                   and bool(_re.search(r'\d', m)) and ':' not in m and '\uff1a' not in m)
+        if is_real and has_price: return 7.0
+        if is_real: return 2.0
+        if is_empty and not has_price: return -3.0
+        if len(m) > 40: return -2.0
+        return 1.0
+    
+    clean = []
+    for row in filtered:
+        if _score_row(row.get('model',''), row.get('price_rmb'), row.get('spec_zh','')) >= -1.5:
+            clean.append(row)
+    return pd.DataFrame(clean)
 
 
-def parse_single_spec(ws) -> pd.DataFrame:
-    """单产品规格表 - 合并所有参数到一个产品"""
+def _parse_single_spec_old(ws) -> pd.DataFrame:
+    """单产品规格表 - 合并所有参数到一个产品 (旧版, 接收ws)"""
     specs = []
     model_name = None
     
@@ -759,6 +857,19 @@ def parse_excel_v3(file_path: str) -> Optional[pd.DataFrame]:
             ws = wb.active
             
             layout = classify_format(ws)
+            _product_codes = 0
+            if layout == 'single_spec':
+                import re as _re
+                # 扫描 A~D 列（1~4），查找短字母+数字组合的产品代码
+                for _c in range(1, 5):
+                    for _r in range(2, min(ws.max_row + 1, 40)):
+                        _v = str(ws.cell(_r, _c).value or '').strip()
+                        if 2 <= len(_v) <= 40 and _re.search(r'[A-Za-z]', _v) and _re.search(r'\d', _v):
+                            _product_codes += 1
+                            if _product_codes >= 3:
+                                break
+                    if _product_codes >= 3:
+                        break
             wb.close()
             
             # 使用新的专用解析器
@@ -797,7 +908,11 @@ def parse_excel_v3(file_path: str) -> Optional[pd.DataFrame]:
                     return df
             
             elif layout == 'single_spec':
-                df = parse_single_spec(file_path)
+                # 已在 wb.close() 之前计算 _product_codes，直接使用
+                if _product_codes >= 3:
+                    df = None  # 回退到 fallback 解析
+                else:
+                    df = parse_single_spec(file_path)
                 if df is not None and len(df) > 0:
                     df['_source_file'] = os.path.basename(file_path)
                     if 'spec_zh' in df.columns:
@@ -830,7 +945,7 @@ def parse_excel_v3(file_path: str) -> Optional[pd.DataFrame]:
         elif layout == 'price':
             df = parse_price_list(ws)
         elif layout == 'single_spec':
-            df = parse_single_spec(ws)
+            df = _parse_single_spec_old(ws)
         else:
             df = parse_vertical(ws, images_by_row)
         

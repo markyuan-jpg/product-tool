@@ -40,9 +40,9 @@ def parse_invoice_sheet(ws) -> pd.DataFrame:
             if 'description' in val_str or 'item' in val_str:
                 header_row = r
                 break
-        if r == 3 and ws.cell(r, 1).value:
+        # r==3 fallback: 仅当未找到更好表头时使用，但不阻断后续匹配
+        if r == 3 and ws.cell(r, 1).value and header_row == 1:
             header_row = r
-            break
     
     col_desc = 1   # A
     col_spec = 3   # C  

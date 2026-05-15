@@ -54,7 +54,7 @@ def resize_image(path: str, max_w: int = MAX_IMAGE_WIDTH, quality: int = JPEG_QU
     
     ratio = max_w / img.width
     new_h = int(img.height * ratio)
-    img = img.resize((max_w, new_h), PILImage.LANCZOS)
+    img = img.resize((max_w, new_h), PILImage.BILINEAR)
     
     fmt = 'JPEG' if path.lower().endswith(('.jpg', '.jpeg')) else 'PNG'
     buf = io.BytesIO()

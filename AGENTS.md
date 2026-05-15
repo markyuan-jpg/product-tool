@@ -48,3 +48,13 @@ python -m venv venv
 
 `CREEM_API_KEY`、`CREEM_WEBHOOK_SECRET`、`CREEM_PRODUCT_ID_PRO` 为空时，
 Pro 升级返回 502。如需启用，在 `backend/.env` 中配置。
+
+## 解析器择优系统
+
+`backend/main.py` 对同一个文件同时运行两个解析器：
+1. **通用解析器**（`universal_parser.py`）：三层策略（KV→表格→内容驱动）
+2. **专用解析器**（`run.parse_file`）：格式检测 + 6种专用解析器 + 多级 fallback
+
+然后用 `backend/score.py` 的 **信号组合评分系统** 对两个结果评分，分高者胜。
+评分维度：逐产品 7 级信号组合（真型号+价格+参数→+7） + 全局一致性加成。
+不再使用旧的数量比较逻辑（谁产品多选谁）。

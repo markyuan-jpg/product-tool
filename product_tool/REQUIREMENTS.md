@@ -296,15 +296,32 @@ New `extract_images_from_docx()`: extracts from `word/media/`, assigns by file o
 
 ### 1. Three-Strategy Scoring (Excel / PDF / DOCX)
 
-All parsers share a unified 3-strategy architecture with score-based selection:
+All parsers share a unified 3-strategy architecture. Internal per-parser scoring selects the best strategy within each parser:
 
-| Parser | Strategy A | Strategy B | Strategy C | Score Function |
+| Parser | Strategy A | Strategy B | Strategy C | Internal Score |
 |--------|-----------|-----------|-----------|----------------|
 | `universal_parser.py` | KV → Table layout | Content-driven column inference | — | `score_result()` |
 | `pdf_parser.py` | col_based / row_based | Content-driven (`_classify_pdf_columns`) | — | `_score_pdf_result()` |
 | `doc_parser.py` | Header keyword match | Content-driven column roles | Paragraph text extraction | `_score_docx_result()` |
 
-Scoring: `products × 0.3 + has_model × 0.3 + has_price × 0.2 + model_diversity × 0.2 − label_penalty` (penalty if Image/Description etc. are treated as models).
+### Cross-Parser Selection (`backend/score.py`)
+
+The universal and specialized parser outputs are compared using a **signal combination scoring system**:
+
+| Signal Combination | Score | Description |
+|-------------------|-------|-------------|
+| Real model + price + params | +7 | Strongest signal |
+| Real model + price | +5 | Strong |
+| Real model + params | +4 | Medium |
+| Real model only | +2 | Acceptable |
+| Price only, no model | +1 | Weak |
+| Fake model (商品_R/产品_R) | -3 | Auto-generated |
+| Empty model + no price | -3 | Noise row |
+| Model has colon or too long | -2 | Misaligned column |
+
+Global consistency bonus: ≥3 unique real models +3, ≥3 products with prices +2, noise ratio<20% +1.
+
+Final score = (sum of per-row scores + bonus) ÷ product count. Higher score wins.
 
 ### 2. Column-Based Image Filtering
 

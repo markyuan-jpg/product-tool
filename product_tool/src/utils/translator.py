@@ -2,6 +2,7 @@
 """
 简单多语言翻译 - 规则替换版
 """
+import re
 import pandas as pd
 from typing import Dict, Optional
 
@@ -325,7 +326,7 @@ def batch_translate(texts: list, mode: str = 'zh_en') -> dict:
     unique = list(dict.fromkeys(texts))  # 去重保序
     result = {}
     for t in unique:
-        result[t] = translate_text(t, mode)
+        result[t] = translate_spec_safe(t, mode)
     return result
 
 
@@ -520,6 +521,56 @@ def bilingual_text(text_zh: str, text_en: str = None) -> str:
     if not text_en or text_en == text_zh:
         return text_zh
     return f"{text_zh} / {text_en}"
+
+
+# ─── 专业代码保护翻译 ───
+
+_CODE_PATTERN = re.compile(r'\b[A-Z]{2,5}\d*\b')
+
+
+def protect_codes(text: str) -> tuple:
+    """保护专业代码（全大写缩写）不被翻译
+    
+    Returns:
+        (保护后文本, {占位符: 原文})
+    """
+    codes = {}
+
+    def _save(m):
+        tag = f'\x00CODE_{len(codes)}\x00'
+        codes[tag] = m.group(0)
+        return tag
+
+    return _CODE_PATTERN.sub(_save, text), codes
+
+
+def restore_codes(text: str, codes: dict) -> str:
+    """恢复被保护的代码"""
+    for tag, code in codes.items():
+        text = text.replace(tag, code)
+    return text
+
+
+def translate_spec_safe(text: str, mode: str = 'zh_en') -> str:
+    """翻译规格文本，保护专业缩写不受影响"""
+    if not text:
+        return text
+    # 1. 保护全大写缩写
+    protected, codes = protect_codes(text)
+    # 2. 中→英方向：代码与中文之间加空格
+    if mode == 'zh_en':
+        protected = re.sub(
+            r'(\x00CODE_\d+\x00)([\u4e00-\u9fff])',
+            r'\1 \2', protected
+        )
+        protected = re.sub(
+            r'([\u4e00-\u9fff])(\x00CODE_\d+\x00)',
+            r'\1 \2', protected
+        )
+    # 3. 翻译（代码已被占位符保护）
+    translated = translate_text(protected, mode)
+    # 4. 恢复代码
+    return restore_codes(translated, codes)
 
 
 if __name__ == '__main__':

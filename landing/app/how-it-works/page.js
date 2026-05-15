@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Nav from '@/components/Nav';
 import Footer from '@/components/Footer';
 
@@ -61,6 +61,11 @@ const docTypes = [
 ];
 
 export default function HowItWorksPage() {
+  useEffect(() => {
+    document.title = '工作原理 — PDF/Excel 产品数据自动提取，生成报价单';
+    const meta = document.querySelector('meta[name="description"]');
+    if (meta) meta.setAttribute('content', '上传文件→三层解析引擎自动识别产品、规格、价格→匹配图片→生成报价单。支持Excel/PDF/Word，准确率95%。');
+  }, []);
   const [expanded, setExpanded] = useState(0);
 
   return (

@@ -27,6 +27,7 @@ node_modules/
 temp_images/
 product_tool/temp_images/
 product_tool/data/*.db
+data/
 
 # Backend runtime
 backend/uploads/
