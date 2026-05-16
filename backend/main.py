@@ -464,6 +464,8 @@ def _init_products_db():
 
     import sqlite3
 
+    PRODUCTS_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+
     conn = sqlite3.connect(str(PRODUCTS_DB_PATH))
 
     conn.row_factory = sqlite3.Row
