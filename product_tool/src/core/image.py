@@ -618,6 +618,7 @@ def match_images_to_products(df, file_path: str) -> 'pd.DataFrame':
         os.path.join(base_dir, 'data', '新能源电动车', 'images'),
         os.path.join(base_dir, 'data', 'images'),
         os.path.join(os.path.dirname(file_path), 'images'),
+        TEMP_IMAGE_FOLDER,
     ]
     for idx2, row in df.iterrows():
         if row.get('_image_path'):

@@ -49,6 +49,12 @@ python -m venv venv
 `CREEM_API_KEY`、`CREEM_WEBHOOK_SECRET`、`CREEM_PRODUCT_ID_PRO` 为空时，
 Pro 升级返回 502。如需启用，在 `backend/.env` 中配置。
 
+启用步骤：
+1. 注册 Creem → 创建产品 → 复制 Product ID 到 `CREEM_PRODUCT_ID_PRO`
+2. Creem Settings → API Keys → 复制 Secret Key 到 `CREEM_API_KEY`
+3. Creem Settings → Webhooks → 添加 URL `https://你的railway域名.up.railway.app/api/payment/webhook` → 复制 Signing Secret 到 `CREEM_WEBHOOK_SECRET`
+4. Railway → Variables → 加上这 3 个变量
+
 ## 解析器择优系统
 
 `backend/main.py` 对同一个文件同时运行两个解析器：
