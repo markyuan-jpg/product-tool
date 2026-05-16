@@ -22,7 +22,7 @@ logs/
 # Temp & generated
 temp_images/
 src/temp_images/
-output/
+/output/
 *.txt
 test_*.xlsx
 *.db
