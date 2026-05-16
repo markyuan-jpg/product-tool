@@ -26,7 +26,7 @@ node_modules/
 # Temp / generated data
 temp_images/
 product_tool/temp_images/
-product_tool/data/*.db
+*.db
 data/
 
 # Backend runtime
