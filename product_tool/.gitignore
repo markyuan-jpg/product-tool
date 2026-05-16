@@ -23,7 +23,8 @@ logs/
 temp_images/
 src/temp_images/
 /output/
-*.txt
+temp_images/*.txt
+src/temp_images/*.txt
 test_*.xlsx
 *.db
 
