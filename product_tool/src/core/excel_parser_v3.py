@@ -668,11 +668,7 @@ def parse_vertical(ws, images_by_row: Dict[int, str] = None) -> pd.DataFrame:
         if remark_col:
             remark_val = str(row.get(remark_col, '') or '').strip()
         
-        for col_name, col_value in row.items():
-            if col_name not in [model_col, name_col, spec_col, price_col, remark_col]:
-                if col_value and str(col_value).strip():
-                    if str(col_value).strip() not in [str(spec) if spec else '', str(name) if name else '', str(model) if model else '']:
-                        spec_parts.append(str(col_value).strip())
+        # 不再收集未映射列到 spec（防污染，与 doc_parser 一致）
         
         result.append({
             'model': str(model).strip() if model else '',

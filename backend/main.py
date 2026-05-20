@@ -38,7 +38,7 @@ sys.path.insert(0, str(SRC_DIR))
 sys.path.insert(0, str(PROJECT_ROOT / "product_tool"))
 
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query, Request, Depends, Header
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query, Request, Depends, Header, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fastapi.middleware.cors import CORSMiddleware
@@ -70,8 +70,9 @@ from universal_parser import parse as universal_parse, sheet_to_markdown
 
 from universal_parser import detect_header_row, parse_with_colmap, score_result
 
-from ai_parser import load_cache, save_cache, ai_detect_columns, get_cache_key as ai_cache_key
+from ai_parser import load_cache, save_cache, ai_detect_columns, parse_text_to_products, get_cache_key as ai_cache_key
 from score import score_dataframe
+from src.rates import get_rate as _get_exchange_rate
 
 
 @asynccontextmanager
@@ -315,6 +316,17 @@ async def payment_webhook(request: Request, db: AsyncSession = Depends(get_sessi
 def health():
 
     return {"status": "ok", "time": datetime.utcnow().isoformat()}
+
+
+@app.get("/api/exchange-rate")
+
+async def exchange_rate(from_currency: str = Query("USD"), to_currency: str = Query("CNY")):
+    """Get real-time exchange rate between two currencies."""
+    try:
+        rate = _get_exchange_rate(from_currency.upper(), to_currency.upper())
+        return {"from": from_currency.upper(), "to": to_currency.upper(), "rate": rate, "source": "api.exchangerate.host"}
+    except Exception as e:
+        raise HTTPException(502, f"获取汇率失败: {str(e)}")
 
 
 #  Auth endpoints
@@ -1462,6 +1474,23 @@ async def parse_with_ai(file: UploadFile = File(...), ai_backend: str = Form("ge
         if save_path.exists():
 
             os.remove(save_path)
+
+
+@app.post("/api/parse-text-products")
+
+async def parse_text_products(data: dict = Body(...), user: User = Depends(get_current_user_optional)):
+    """从自由文本中提取结构化产品（智能粘贴功能 — 仅 Pro）"""
+    if not user:
+        raise HTTPException(401, "请先登录")
+    require_pro(user)
+    text = data.get('text', '')
+    if not text or not text.strip():
+        return {"products": [], "count": 0}
+    try:
+        products = parse_text_to_products(text, backend='deepseek')
+        return {"products": products, "count": len(products)}
+    except Exception as e:
+        raise HTTPException(422, f"文本解析失败: {str(e)}")
 
 
 #  Document Templates 

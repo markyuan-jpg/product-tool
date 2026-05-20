@@ -59,19 +59,20 @@ def extract_tables(doc: Document) -> List[List[List[str]]]:
     
     for table in doc.tables:
         table_data = []
-        # 垂直合并跟踪：前一行每列最后一个非空值
         prev_row = [None] * min(len(table.rows[0].cells) if table.rows else 0, 50)
-        for row in table.rows:
+        for ri, row in enumerate(table.rows):
             row_data = [cell.text.strip() for cell in row.cells]
-            # 合并单元格传播：空值用前一行同列值填充（垂直合并）
-            for ci, val in enumerate(row_data):
-                if not val and ci < len(prev_row) and prev_row[ci]:
-                    row_data[ci] = prev_row[ci]
+            # 合并单元格传播：空值用前一行同列值填充（首行不传播也不记录，防表头泄漏）
+            if ri > 0:
+                for ci, val in enumerate(row_data):
+                    if not val and ci < len(prev_row) and prev_row[ci]:
+                        row_data[ci] = prev_row[ci]
             table_data.append(row_data)
-            # 记录非空值作为下一行的合并参考
-            for ci, val in enumerate(row_data):
-                if val and ci < len(prev_row):
-                    prev_row[ci] = val
+            # 记录非空值作为下一行的合并参考（跳过首行）
+            if ri > 0:
+                for ci, val in enumerate(row_data):
+                    if val and ci < len(prev_row):
+                        prev_row[ci] = val
         
         if table_data:
             tables.append(table_data)
@@ -145,9 +146,11 @@ def _infer_docx_columns(table: List[List[str]]) -> dict:
                 packaging_count += 1
             if re.search(r'[A-Za-z]+\d+', v):
                 model_count += 1
-            cleaned = re.sub(r'[¥$€£,元]', '', v)
+            # 尝试解析为价格：先清除单位后缀（/box, /pc, /pack, /set等）和货币符号
+            cleaned_for_price = re.sub(r'/[a-zA-Z/]+', '', v)  # 去掉 /box, /pc, /pack 等
+            cleaned_for_price = re.sub(r'[¥$€£,元]', '', cleaned_for_price)
             try:
-                f = float(cleaned)
+                f = float(cleaned_for_price)
                 if 0.01 < f < 10000000:
                     price_count += 1
             except Exception:
@@ -249,17 +252,20 @@ def _score_docx_result(products: List[Dict]) -> float:
     return score
 
 
-def _table_to_products(table, col_map, header_idx):
-    """按列映射从表格提取产品（收集所有列作为 spec）"""
+def _table_to_products(table, col_map, header_idx, currency='CNY'):
+    """按列映射从表格提取产品"""
     products = []
     for row in table[header_idx + 1:]:
         if not any(row):
             continue
-        product = {}
+        product = {'currency': currency}
         for role, col_idx in col_map.items():
             if col_idx >= 0 and col_idx < len(row):
                 product[role] = row[col_idx]
-        # 如果 model 像规格（含尺寸单位/纯数字/尺寸标签/远长于name），回退到 name
+        # 如果 model 未找到且有 name，用 name 作为 model
+        if not product.get('model') and product.get('name'):
+            product['model'] = product['name']
+        # model/name/spec 互检（原逻辑保留）
         model_val = str(product.get('model', ''))
         name_val = str(product.get('name', ''))
         if model_val and name_val:
@@ -270,17 +276,13 @@ def _table_to_products(table, col_map, header_idx):
                 product['model'] = name_val
                 if not product.get('spec'):
                     product['spec'] = model_val
-        # 收集表中未映射的列作为额外 spec
-        mapped_cols = set(col_map.values())
-        extra_specs = []
-        for idx, val in enumerate(row):
-            if idx not in mapped_cols and val and str(val).strip():
-                col_name = table[header_idx][idx] if idx < len(table[header_idx]) else f'col_{idx}'
-                extra_specs.append(f"{col_name}: {val}")
-        if extra_specs:
-            existing_spec = product.get('spec', '')
-            extra_text = '; '.join(extra_specs)
-            product['spec'] = (existing_spec + '; ' + extra_text) if existing_spec else extra_text
+        # qty 空值时尝试用 Moq 列（如果映射了）
+        if not product.get('qty') and col_map.get('qty', -1) >= 0:
+            qty_raw = str(product.get('qty', '')).strip()
+            import re as _re
+            nums = _re.findall(r'\d+', qty_raw)
+            if nums:
+                product['qty'] = nums[0]
         if product:
             products.append(product)
     return products
@@ -353,11 +355,17 @@ def parse_product_docx(file_path: str) -> Optional[Dict]:
                     col_map['spec'] = j
                 elif col_map['price'] < 0 and any(kw in col_lower for kw in ['价格', 'price', '单价', '金额', '元', 'rmb', 'cny', 'usd']):
                     col_map['price'] = j
-                elif col_map['qty'] < 0 and any(kw in col_lower for kw in ['数量', 'qty', 'quantity', 'pcs']):
+                elif col_map['qty'] < 0 and any(kw in col_lower for kw in ['数量', 'qty', 'quantity', 'pcs', 'moq']):
                     col_map['qty'] = j
             
             if col_map['model'] >= 0 or col_map['price'] >= 0:
-                products = _table_to_products(table, col_map, header_idx)
+                # 检测币种：查看价格列表头文本
+                detected_currency = 'CNY'
+                if col_map['price'] >= 0 and col_map['price'] < len(header_row):
+                    ph = header_row[col_map['price']].lower()
+                    if 'usd' in ph or '$' in ph:
+                        detected_currency = 'USD'
+                products = _table_to_products(table, col_map, header_idx, currency=detected_currency)
                 if products:
                     all_candidates.append(('table_header', products))
         
@@ -410,12 +418,24 @@ def parse_product_docx(file_path: str) -> Optional[Dict]:
     
     # ─── 择优 ───
     if all_candidates:
-        best = max(all_candidates, key=lambda c: _score_docx_result(c[1]))
+        # 给表头匹配结果加分（正确识别列名比纯推断更可靠）
+        scored = []
+        for source, prods in all_candidates:
+            s = _score_docx_result(prods)
+            if source == 'table_header':
+                s += 5  # 表头匹配优先
+                # 额外加分：有价格列映射
+                if any(p.get('price') for p in prods):
+                    s += 3
+            scored.append((s, source, prods))
+        best = max(scored, key=lambda c: c[0])
+        best_source = best[1]
+        best_products = best[2]
         result = {
             'text': text,
             'tables': tables,
-            'products': best[1],
-            'parse_source': best[0],
+            'products': best_products,
+            'parse_source': best_source,
         }
     else:
         result = {
@@ -444,23 +464,28 @@ def extract_products_from_docx(file_path: str) -> 'pd.DataFrame':
     data = []
     for idx, p in enumerate(products):
         price_val = 0
-        price_raw = p.get('price', 0)
-        if price_raw:
+        price_raw_str = p.get('price', '')
+        cur = p.get('currency', 'CNY')
+        if cur not in ('USD', 'CNY'):
+            cur = 'CNY'
+        
+        if price_raw_str:
             try:
                 import re
-                nums = re.findall(r'[\d,]+\.?\d*', str(price_raw))
+                nums = re.findall(r'[\d,]+\.?\d*', str(price_raw_str))
                 if nums:
                     price_val = float(nums[0].replace(',', ''))
             except (ValueError, TypeError):
                 pass
         
-        cur = p.get('currency', '')
         row = {
             'model': p.get('model', ''),
             'name_zh': p.get('name', ''),
             'spec_zh': p.get('spec', ''),
             'price_rmb': price_val,
-            'currency': cur if cur in ('USD', 'CNY') else 'CNY',
+            'price_raw': price_raw_str,  # 保留原始价格字符串（含单位/多价格）
+            'currency': cur,
+            'qty': p.get('qty', ''),
             '_row': idx + 1,
             '_sheet': os.path.basename(file_path),
         }

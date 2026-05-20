@@ -490,9 +490,8 @@ def match_sku_folder(sku: str, image_dirs: List[str]) -> Optional[str]:
 
 def extract_images_from_docx(file_path: str) -> Dict[int, str]:
     """
-    从 DOCX 提取图片, 按顺序返回 {index: file_path}
-    
-    DOCX 图片在 word/media/ 中, 按文件名排序后与产品顺序匹配
+    从 DOCX 提取图片, 解析 XML 确定每个图片所在的表格行。
+    返回 {product_row_index: file_path}，跳过没有图片的行。
     """
     import zipfile as zf_local
     images = {}
@@ -500,31 +499,102 @@ def extract_images_from_docx(file_path: str) -> Dict[int, str]:
         return images
     try:
         with zf_local.ZipFile(file_path, 'r') as z:
-            media_files = sorted([
-                n for n in z.namelist()
-                if n.startswith('word/media/') and not n.endswith('/')
-            ])
+            # 1. 解析 document.xml 找出有图片的表格行
+            import xml.etree.ElementTree as ET
+            namespaces = {
+                'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+                'wp': 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing',
+                'a': 'http://schemas.openxmlformats.org/drawingml/2006/main',
+                'r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+                'pic': 'http://schemas.openxmlformats.org/drawingml/2006/picture',
+            }
+            # 加载关系映射（rId → 文件名）
+            rels = {}
+            try:
+                rels_xml = z.read('word/_rels/document.xml.rels')
+                rels_root = ET.fromstring(rels_xml)
+                for rel_elem in rels_root.findall('{http://schemas.openxmlformats.org/package/2006/relationships}Relationship'):
+                    rid = rel_elem.get('Id')
+                    target = rel_elem.get('Target', '')
+                    if rid and target.startswith('media/'):
+                        rels[rid] = target
+            except Exception:
+                pass
+            
+            # 提取 media 文件
+            media_files = {}
+            for n in z.namelist():
+                if n.startswith('word/media/') and not n.endswith('/'):
+                    fname = n.replace('word/', '', 1)
+                    media_files[fname] = n
+            
             if not media_files:
                 return images
+            
+            # 2. 解析 XML 找出表格中哪些单元格有图片
+            doc_xml = z.read('word/document.xml')
+            root = ET.fromstring(doc_xml)
+            
+            # 找到所有表格
+            tables = root.findall('.//w:tbl', namespaces)
+            if not tables:
+                return images
+            
+            # 遍历所有表格，找到第一个表格的图片列
+            img_rows_with_positions = []  # (table_idx, row_idx, rid)
+            for ti, tbl in enumerate(tables):
+                rows = tbl.findall('.//w:tr', namespaces)
+                for ri, row in enumerate(rows):
+                    cells = row.findall('.//w:tc', namespaces)
+                    # 检查第一个单元格（Photo列）是否有图片
+                    if cells:
+                        drawings = cells[0].findall('.//w:drawing', namespaces)
+                        if not drawings:
+                            drawings = cells[0].findall('.//wp:inline', namespaces)
+                        if drawings:
+                            # 找到图片引用
+                            blip = drawings[0].findall('.//a:blip', namespaces)
+                            if blip:
+                                embed = blip[0].get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed')
+                                if embed and embed in rels:
+                                    media_fname = rels[embed]
+                                    if media_fname in media_files:
+                                        img_rows_with_positions.append((ti, ri, media_files[media_fname]))
+            
             os.makedirs(TEMP_IMAGE_FOLDER, exist_ok=True)
-            for idx, mf in enumerate(media_files):
-                img_data = z.read(mf)
-                ext = os.path.splitext(mf)[1] or '.png'
+            
+            # 按 (table_idx, row_idx) 提取图片，跳过表头行 (ri=0)
+            # 用表格行号 ri 作为 key（与 DataFrame 的 _row 对应）
+            img_row_map = {}
+            for ti, ri, mf_path in img_rows_with_positions:
+                if ri == 0:
+                    continue
+                key = (ti, ri)
+                if key not in img_row_map:
+                    img_row_map[key] = mf_path
+            
+            for (ti, ri), mf_path in sorted(img_row_map.items()):
+                img_data = z.read(mf_path)
+                ext = os.path.splitext(mf_path)[1] or '.png'
                 img_path = _save_image_unique(img_data, ext)
-                images[idx] = img_path
+                images[ri] = img_path  # key=行号，与 _row 对应
+                
     except Exception as e:
-        logging.warning(f"DOCX image extraction failed: {e}")
+        logging.warning(f"DOCX image extraction (XML) failed: {e}")
+    
     return images
 
 
 def match_images_to_products_docx(df, file_path: str):
-    """为 DOCX 解析的 DataFrame 按顺序分配图片"""
+    """为 DOCX 解析的 DataFrame 分配图片（按 _row 匹配，跳过无图行）"""
     images = extract_images_from_docx(file_path)
     if not images or df.empty:
         return df
     df['_image_path'] = ''
-    for idx in range(min(len(df), len(images))):
-        df.at[idx, '_image_path'] = images[idx]
+    for idx, row in df.iterrows():
+        row_num = row.get('_row')
+        if row_num and row_num in images:
+            df.at[idx, '_image_path'] = images[row_num]
     return df
 
 
@@ -588,29 +658,14 @@ def match_images_to_products(df, file_path: str) -> 'pd.DataFrame':
     def _order_match(idx, images):
         if not images:
             return None
-        return images[idx % len(images)][2]
+        # 按序号匹配，但只在不同 sheet 间不混用时才安全
+        if idx < len(images):
+            return images[idx][2]
+        return None
 
     df['_image_path'] = df.apply(find_image, axis=1)
 
-    # ─── 图片扩散：同一 sheet 内，将图片扩散到相邻无图片的产品 ───
-    if '_sheet' in df.columns and '_row' in df.columns:
-        for sheet_name in df['_sheet'].unique():
-            sheet_df = df[df['_sheet'] == sheet_name]
-            # 找到有图片的行
-            img_rows = sheet_df[sheet_df['_image_path'].notna() & (sheet_df['_image_path'] != '')]
-            for _, img_row in img_rows.iterrows():
-                img_path = img_row['_image_path']
-                img_row_num = img_row['_row']
-                # 上下各扩散 5 行
-                for delta in range(-5, 6):
-                    if delta == 0:
-                        continue
-                    target = sheet_df[sheet_df['_row'] == img_row_num + delta]
-                    if target.empty:
-                        continue
-                    target_idx = target.index[0]
-                    if not df.at[target_idx, '_image_path']:
-                        df.at[target_idx, '_image_path'] = img_path
+    # ─── 图片扩散已移除（会错误地将图片分配给无图产品） ───
 
     # 对仍未匹配的, 尝试 SKU 文件夹回退
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

@@ -384,15 +384,35 @@ def associate_external_images(df: pd.DataFrame, input_dir: str, verbose: bool = 
                 group_images.extend(g.glob(os.path.join(img_dir, ext)))
         
         if group_images:
-            # 用组内图片分配
-            for i, idx in enumerate(empty_idx):
-                df.loc[idx, '_image_path'] = group_images[i % len(group_images)]
+            # 尝试按型号匹配文件名
+            unmatched_products = []
+            for idx in empty_idx:
+                model = str(df.loc[idx, 'model']).strip().lower()
+                if not model:
+                    unmatched_products.append(idx)
+                    continue
+                matched = False
+                for img_path in group_images:
+                    img_name = os.path.splitext(os.path.basename(img_path))[0].lower()
+                    if model in img_name or img_name in model:
+                        df.loc[idx, '_image_path'] = img_path
+                        matched = True
+                        break
+                if not matched:
+                    unmatched_products.append(idx)
+            # 型号没匹配到的也不循环分配，留空
         else:
-            # 没有对应目录 → 从 fallback 池分配
-            for i, idx in enumerate(empty_idx):
-                if fallback_idx < len(all_fallback_images):
-                    df.loc[idx, '_image_path'] = all_fallback_images[fallback_idx]
-                    fallback_idx += 1
+            # 没有对应目录 → 从 fallback 池按型号匹配
+            for idx in empty_idx:
+                model = str(df.loc[idx, 'model']).strip().lower()
+                if not model:
+                    continue
+                for fi in range(fallback_idx, len(all_fallback_images)):
+                    img_name = os.path.splitext(os.path.basename(all_fallback_images[fi]))[0].lower()
+                    if model in img_name or img_name in model:
+                        df.loc[idx, '_image_path'] = all_fallback_images[fi]
+                        fallback_idx = fi + 1
+                        break
     
     return df
 

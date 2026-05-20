@@ -383,18 +383,13 @@ class QuotationExcel:
 
                     unit_price = float(unit_price_raw)
 
-                    # USD CNY auto conversion
-
-                    if self.currency == 'USD' and unit_price > 0:
-
+                    # USD CNY auto conversion（仅当产品原始币种未知或为CNY时才转换）
+                    prod_currency = str(row.get('currency', 'CNY') or 'CNY').strip().upper()
+                    if self.currency == 'USD' and unit_price > 0 and prod_currency != 'USD':
                         try:
-
                             from src.rates import get_rate
-
                             rate = get_rate('CNY', 'USD') or 0.14
-
                             unit_price = round(unit_price * rate, 2)
-
                         except Exception:
 
                             pass
@@ -833,49 +828,39 @@ class QuotationExcel:
 
                         ws.row_dimensions[row].height = est_height
 
-                elif col_idx == 5:  # 
-
-                    cell.value = value
-
+                elif col_idx == 5:  # Qty
+                    try:
+                        cell.value = int(value) if value else 0
+                    except (ValueError, TypeError):
+                        cell.value = 0
+                    cell.number_format = '#,##0'
                     cell.alignment = DATA_ALIGN_CENTER
 
-                elif col_idx == 6:  #  ???
-
-                    if value and value > 0:
-
-                        if value == int(value):
-
-                            cell.value = int(value)
-
-                        else:
-
-                            cell.value = value
-
-                        cell.number_format = '#,##0.##'
-
+                elif col_idx == 6:  # Unit Price
+                    try:
+                        price_val = float(value) if value else 0
+                    except (ValueError, TypeError):
+                        price_val = 0
+                    if price_val > 0:
+                        cell.value = price_val
+                        cell.number_format = '#,##0.00'
                     else:
-
                         cell.value = '-'
-
                     cell.alignment = DATA_ALIGN_RIGHT
-
                     cell.font = PRICE_FONT
 
                 elif col_idx == 7:  # Total
-
-                    if value and value > 0:
-
-                        cell.value = value
-
+                    try:
+                        total_val = float(value) if value else 0
+                    except (ValueError, TypeError):
+                        total_val = 0
+                    if total_val > 0:
+                        cell.value = total_val
                     else:
-
                         cell.value = 0
-
                     cell.alignment = DATA_ALIGN_RIGHT
-
                     cell.font = PRICE_FONT
-
-                    cell.number_format = '#,##0.##'
+                    cell.number_format = '#,##0.00'
 
                 
 

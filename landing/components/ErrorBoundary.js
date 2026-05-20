@@ -1,8 +1,11 @@
 'use client';
 
 import { Component } from 'react';
+import { LocaleContext, t } from '@/lib/i18n';
 
 export default class ErrorBoundary extends Component {
+  static contextType = LocaleContext;
+
   constructor(props) {
     super(props);
     this.state = { hasError: false, error: null };
@@ -18,6 +21,7 @@ export default class ErrorBoundary extends Component {
 
   render() {
     if (this.state.hasError) {
+      const locale = this.context?.locale || 'zh';
       return (
         <div style={{
           display: 'flex',
@@ -31,10 +35,10 @@ export default class ErrorBoundary extends Component {
         }}>
           <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>⚠️</div>
           <h1 style={{ fontSize: '1.25rem', fontWeight: 600, margin: '0 0 0.5rem' }}>
-            页面出现异常
+            {t('error.title', locale)}
           </h1>
           <p style={{ color: '#666', margin: '0 0 1.5rem', maxWidth: 400 }}>
-            请刷新页面重试。如果问题持续，请联系技术支持。
+            {t('error.desc', locale)}
           </p>
           <button
             onClick={() => { this.setState({ hasError: false, error: null }); window.location.reload(); }}
@@ -48,7 +52,7 @@ export default class ErrorBoundary extends Component {
               fontSize: '0.875rem',
             }}
           >
-            刷新页面
+            {t('error.retry', locale)}
           </button>
         </div>
       );

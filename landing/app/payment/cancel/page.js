@@ -3,8 +3,12 @@
 import Link from 'next/link';
 import Nav from '@/components/Nav';
 import Footer from '@/components/Footer';
+import { useLocale, t } from '@/lib/i18n';
 
 export default function PaymentCancelPage() {
+  const { locale, ready } = useLocale();
+  if (!ready) return null;
+
   return (
     <div className="min-h-screen flex flex-col">
       <Nav />
@@ -15,16 +19,16 @@ export default function PaymentCancelPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </div>
-          <h1 className="text-xl font-bold text-[var(--navy)] mb-2">支付未完成</h1>
-          <p className="text-sm text-[var(--text-secondary)] mb-6">你的支付已被取消，未产生任何扣费。如有任何问题，请联系客服。</p>
+          <h1 className="text-xl font-bold text-[var(--navy)] mb-2">{t('payment.cancelTitle', locale)}</h1>
+          <p className="text-sm text-[var(--text-secondary)] mb-6">{t('payment.cancelDesc', locale)}</p>
           <div className="flex gap-3 justify-center">
             <Link href="/pricing"
               className="px-6 py-2.5 rounded-lg border border-[var(--navy)] text-[var(--navy)] text-sm font-medium hover:bg-gray-50">
-              重新选择方案
+              {t('payment.cancelBtn', locale)}
             </Link>
             <Link href="/workspace"
               className="px-6 py-2.5 rounded-lg bg-[var(--navy)] text-white text-sm font-medium hover:bg-[var(--navy-light)]">
-              返回工作台
+              {t('payment.successBtn', locale)}
             </Link>
           </div>
         </div>

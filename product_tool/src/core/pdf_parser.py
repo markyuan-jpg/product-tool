@@ -98,7 +98,7 @@ def extract_images_from_pdf(pdf_path: str, output_dir: str = None) -> List[Dict]
 
 
 def _fill_pdf_merged(table):
-    """填充PDF表格中的合并单元格（None → 同一列最近非空值）。"""
+    """填充PDF表格中的合并单元格（None → 同一列最近非空值，跳过首行防表头泄漏）。"""
     if not table:
         return table
     result = [list(row) for row in table]  # 深拷贝
@@ -106,8 +106,12 @@ def _fill_pdf_merged(table):
         last_val = None
         for r in range(len(result)):
             if c < len(result[r]):
-                if result[r][c] is None or str(result[r][c]).strip() == '':
-                    result[r][c] = last_val  # 向上传播
+                if r == 0:
+                    # 首行（表头）不传播，只记录值
+                    if result[r][c] is not None and str(result[r][c]).strip():
+                        last_val = str(result[r][c]).strip()
+                elif result[r][c] is None or str(result[r][c]).strip() == '':
+                    result[r][c] = last_val
                 else:
                     last_val = str(result[r][c]).strip()
     return result
@@ -1167,8 +1171,8 @@ def _associate_images_to_products(df: pd.DataFrame, images: List[Dict]) -> pd.Da
                 df.loc[df.index[i], '_image_path'] = img_path
                 matched = True
                 break
-        # 没匹配到也不跨文件串用，留空
-        if not matched and i < len(images):
-            df.loc[df.index[i], '_image_path'] = images[i]['image_path']
+        # 没匹配到就不分配，避免张冠李戴
+        if not matched:
+            pass
     
     return df

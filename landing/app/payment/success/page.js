@@ -5,10 +5,14 @@ import { useRouter } from 'next/navigation';
 import Nav from '@/components/Nav';
 import Footer from '@/components/Footer';
 import { verifyAuth } from '@/lib/auth';
+import { useLocale, t } from '@/lib/i18n';
 
 export default function PaymentSuccessPage() {
+  const { locale, ready } = useLocale();
   const router = useRouter();
   const [status, setStatus] = useState('verifying');
+
+  if (!ready) return null;
 
   useEffect(() => {
     const check = async () => {
@@ -32,8 +36,8 @@ export default function PaymentSuccessPage() {
           {status === 'verifying' && (
             <>
               <div className="w-12 h-12 border-3 border-[var(--gold)] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-              <h1 className="text-xl font-bold text-[var(--navy)] mb-2">正在确认支付...</h1>
-              <p className="text-sm text-[var(--text-secondary)]">请稍候，正在激活你的专业版权限</p>
+              <h1 className="text-xl font-bold text-[var(--navy)] mb-2">{t('payment.verifying', locale)}</h1>
+              <p className="text-sm text-[var(--text-secondary)]">{t('payment.verifyingDesc', locale)}</p>
             </>
           )}
           {status === 'success' && (
@@ -43,22 +47,22 @@ export default function PaymentSuccessPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               </div>
-              <h1 className="text-xl font-bold text-[var(--navy)] mb-2">支付成功！</h1>
-              <p className="text-sm text-[var(--text-secondary)] mb-6">你已成功升级为专业版用户，现在可以使用全部功能。</p>
+              <h1 className="text-xl font-bold text-[var(--navy)] mb-2">{t('payment.successTitle', locale)}</h1>
+              <p className="text-sm text-[var(--text-secondary)] mb-6">{t('payment.successDesc', locale)}</p>
               <button onClick={() => router.push('/workspace')}
                 className="px-6 py-2.5 rounded-lg bg-[var(--navy)] text-white text-sm font-medium hover:bg-[var(--navy-light)] cursor-pointer">
-                前往工作台
+                {t('payment.successBtn', locale)}
               </button>
             </>
           )}
           {status === 'pending' && (
             <>
-              <h1 className="text-xl font-bold text-[var(--navy)] mb-2">支付已收到</h1>
-              <p className="text-sm text-[var(--text-secondary)] mb-4">专业版权限正在激活中，通常需要 1-2 分钟。</p>
-              <p className="text-sm text-[var(--text-secondary)] mb-6">如果长时间未激活，请联系客服。</p>
+              <h1 className="text-xl font-bold text-[var(--navy)] mb-2">{t('payment.pending', locale)}</h1>
+              <p className="text-sm text-[var(--text-secondary)] mb-4">{t('payment.pendingDesc', locale)}</p>
+              <p className="text-sm text-[var(--text-secondary)] mb-6">{t('payment.contactSupport', locale)}</p>
               <button onClick={() => router.push('/workspace')}
                 className="px-6 py-2.5 rounded-lg bg-[var(--navy)] text-white text-sm font-medium hover:bg-[var(--navy-light)] cursor-pointer">
-                返回工作台
+                {t('payment.successBtn', locale)}
               </button>
             </>
           )}

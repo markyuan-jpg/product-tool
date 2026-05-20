@@ -2,6 +2,7 @@ import { Noto_Sans_SC, Inter } from "next/font/google";
 import "./globals.css";
 import ClientLayout from "@/components/ClientLayout";
 import { Analytics } from "@vercel/analytics/next";
+import { LocaleProvider } from "@/lib/i18n";
 
 const notoSansSC = Noto_Sans_SC({
   subsets: ["latin"],
@@ -37,7 +38,7 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="zh-CN" className={`${notoSansSC.variable} ${inter.variable}`}>
-      <body className="min-h-screen flex flex-col font-sans"><ClientLayout>{children}</ClientLayout><Analytics /></body>
+      <body className="min-h-screen flex flex-col font-sans"><LocaleProvider><ClientLayout>{children}</ClientLayout></LocaleProvider><Analytics /></body>
     </html>
   );
 }
