@@ -724,77 +724,16 @@ async def save_products(products: str = Form(...), user: dict = Depends(get_curr
 
             raise HTTPException(400, "产品型号不能为空")
 
-    conn = _get_products_db()
-    try:
-        uid = str(user.id)
+    from product_repo import save_products, count_products
+    uid = user.id
 
-        # 免费版检查产品数量上限
-        if user.tier != "pro":
-            current_count = conn.execute("SELECT COUNT(*) FROM web_products WHERE user_id=?", [uid]).fetchone()[0]
-            if current_count + len(items) > 200:
-                raise HTTPException(403, "免费版最多保存200个产品,升级专业版可解除限制")
+    # 免费版检查产品数量上限
+    if user.tier != "pro":
+        current_count = count_products(uid)
+        if current_count + len(items) > 200:
+            raise HTTPException(403, "免费版最多保存200个产品,升级专业版可解除限制")
 
-        inserted = 0
-        for item in items:
-
-            model_val = item.get("model", "").strip()
-            if not model_val:
-                # 型号为空时尝试使用 name_zh 或 spec_zh 前缀做兜底
-                model_val = str(item.get("name_zh", "") or "").strip()[:20]
-            if not model_val:
-                model_val = str(item.get("spec_zh", "") or "").strip()[:20]
-            if not model_val:
-                model_val = f"Item_{item.get('_row', inserted + 1)}"
-            if not model_val:
-                continue
-
-            # Extract packaging info from spec_zh if not separately provided
-            spec_zh = item.get("spec_zh", "")
-
-            pkg = _extract_packaging_from_spec(spec_zh)
-
-            
-
-            carton_size = item.get("carton_size", "") or pkg['carton_size']
-
-            try: gw = float(item.get('gross_weight', 0) or 0) or pkg['gross_weight']
-
-            except Exception: gw = pkg['gross_weight']
-
-            try: nw = float(item.get('net_weight', 0) or 0) or pkg['net_weight']
-
-            except Exception: nw = pkg['net_weight']
-
-            try: cbm = float(item.get('cbm', 0) or 0) or pkg['cbm']
-
-            except Exception: cbm = pkg['cbm']
-
-            try: upc = int(item.get('units_per_carton', 0) or 0) or pkg['units_per_carton']
-
-            except Exception: upc = pkg['units_per_carton']
-
-            packing_type = item.get("packing_type", "") or pkg['packing_type']
-
-            
-
-            # 直接插入(不去重,保留所有解析结果)
-            conn.execute(
-
-                "INSERT INTO web_products (user_id, model, name_zh, spec_zh, price_rmb, price_cny, image_path, currency, carton_size, gross_weight, net_weight, cbm, units_per_carton, packing_type) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-
-                 [uid, model_val, item.get("name_zh",""), spec_zh,
-
-                 item.get("price_rmb"), item.get("price_cny", 0), item.get("_image_path",""), item.get("currency","RMB"),
-
-                 carton_size, gw, nw, cbm, upc, packing_type]
-
-            )
-            inserted += 1
-
-        conn.commit()
-    finally:
-        conn.close()
-
+    inserted = save_products(uid, items)
     return {"status": "ok", "inserted": inserted}
 
 
@@ -802,43 +741,16 @@ async def save_products(products: str = Form(...), user: dict = Depends(get_curr
 
 async def get_products(user: dict = Depends(get_current_user)):
 
-    conn = _get_products_db()
-    try:
-        uid = str(user.id)
-
-        total = conn.execute("SELECT COUNT(*) FROM web_products WHERE user_id=?", [uid]).fetchone()[0]
-
-        # 专业版不限数量,免费版限 200
-        is_pro = user.tier == "pro"
-
-        query = "SELECT * FROM web_products WHERE user_id=?  ORDER BY created_at DESC"
-
-        params = [uid]
-
-        if not is_pro:
-
-            query += " LIMIT ?"
-
-            params.append(200)
-
-        rows = conn.execute(query, params).fetchall()
-    finally:
-        conn.close()
-
-    return {"products": [dict(r) for r in rows], "total": total, "limited": user.tier != "pro"}
+    from product_repo import get_products
+    return get_products(user.id)
 
 
 @app.delete("/api/products/{product_id}")
 
 async def delete_product(product_id: int, user: dict = Depends(get_current_user)):
 
-    conn = _get_products_db()
-    try:
-        conn.execute("DELETE FROM web_products WHERE id=? AND user_id=?", [product_id, str(user.id)])
-        conn.commit()
-    finally:
-        conn.close()
-
+    from product_repo import delete_product as repo_delete
+    repo_delete(product_id, user.id)
     return {"status": "deleted"}
 
 
@@ -847,23 +759,8 @@ async def delete_product(product_id: int, user: dict = Depends(get_current_user)
 async def batch_delete_products(product_ids: str = Form(...), user: dict = Depends(get_current_user)):
 
     ids = json.loads(product_ids)
-
-    uid = str(user.id)
-
-    conn = _get_products_db()
-    try:
-        count = 0
-
-        for pid in ids:
-
-            conn.execute("DELETE FROM web_products WHERE id=? AND user_id=?", [int(pid), uid])
-
-            count += 1
-
-        conn.commit()
-    finally:
-        conn.close()
-
+    from product_repo import batch_delete_products as repo_batch_delete
+    count = repo_batch_delete([int(x) for x in ids], user.id)
     return {"status": "deleted", "count": count}
 
 
@@ -873,59 +770,47 @@ async def batch_delete_products(product_ids: str = Form(...), user: dict = Depen
 
 async def get_quotations(user: dict = Depends(get_current_user)):
 
-    conn = _get_products_db()
-    uid = str(user.id)
+    from product_repo import get_quotations
+    rows = get_quotations(user.id)
     result = []
-    try:
-        rows = conn.execute("SELECT * FROM web_quotations WHERE user_id=?  ORDER BY created_at DESC", [uid]).fetchall()
 
-        for r in rows:
+    for r in rows:
 
-            d = dict(r)
+        try:
 
-            try:
+            pids = json.loads(r.get("product_ids", "[]"))
 
-                pids = json.loads(d.get("product_ids", "[]"))
+            if isinstance(pids, list):
 
-                if isinstance(pids, list):
+                r["model_count"] = len(pids)
 
-                    d["model_count"] = len(pids)
+        except Exception:
 
-            except Exception:
+            r["model_count"] = 0
 
-                d["model_count"] = 0
+        fn = (r.get("file_name") or "").lower()
 
-            fn = (d.get("file_name") or "").lower()
+        if "形式发票" in fn or ("pi" in fn and "pdf" not in fn):
 
-            if "形式发票" in fn or ("pi" in fn and "pdf" not in fn):
+            r["title"] = f"PI #{r['id']}"
 
-                d["title"] = f"PI #{d['id']}"
+        elif "装箱" in fn or "packing" in fn:
 
-            elif "装箱" in fn or "packing" in fn:
+            r["title"] = f"装箱#{r['id']}"
 
-                d["title"] = f"装箱#{d['id']}"
+        elif "发票" in fn or "invoice" in fn:
 
-            elif "发票" in fn or "invoice" in fn:
+            r["title"] = f"商业发票 #{r['id']}"
 
-                d["title"] = f"商业发票 #{d['id']}"
+        elif "pdf" in fn:
 
-            elif "pdf" in fn:
+            r["title"] = f"PDF报价#{r['id']}"
 
-                d["title"] = f"PDF报价#{d['id']}"
+        else:
 
-            else:
+            r["title"] = f"报价#{r['id']}"
 
-                d["title"] = f"报价#{d['id']}"
-
-            result.append(d)
-    finally:
-        conn.close()
-
-    logger.info(f"GET /api/quotations user={uid}: {len(result)} records")
-
-    for r in result:
-
-        logger.info(f"  -> id={r['id']} file={r.get('file_name','')} title={r.get('title','')}")
+        result.append(r)
 
     return {"quotations": result}
 
@@ -1665,27 +1550,12 @@ async def generate_quotation(
 
         user = await get_current_user_optional(authorization, db) 
 
-        if user: 
+        if user:
 
-            conn = _get_products_db() 
-            try:
-                uid = str(user.id) 
-
-                fname = f"报价单_{ts}.xlsx" 
-
-                conn.execute( 
-
-                    "INSERT INTO web_quotations (user_id, product_ids, file_name, file_path) VALUES (?,?,?,?)", 
-
-                    [uid, json.dumps(items), fname, str(output_path)] 
-
-                ) 
-
-                conn.commit() 
-
-                quotation_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0] 
-            finally:
-                conn.close()
+            from product_repo import save_quotation
+            uid = user.id
+            fname = f"报价单_{ts}.xlsx"
+            quotation_id = save_quotation(uid, json.dumps(items), fname, str(output_path))
 
     except Exception as e: 
 
@@ -1706,11 +1576,8 @@ async def generate_quotation(
 
 async def download_quotation(id: int, user: dict = Depends(get_current_user)):
 
-    conn = _get_products_db()
-    try:
-        row = conn.execute("SELECT * FROM web_quotations WHERE id=? AND user_id=?", [id, str(user.id)]).fetchone()
-    finally:
-        conn.close()
+    from product_repo import get_quotation
+    row = get_quotation(id, user.id)
 
     if not row:
 
@@ -1731,29 +1598,14 @@ async def download_quotation(id: int, user: dict = Depends(get_current_user)):
 
 async def delete_quotation(id: int, user: dict = Depends(get_current_user)):
 
-    conn = _get_products_db()
-    try:
-        uid = str(user.id)
+    from product_repo import delete_quotation as repo_delete_q
+    file_path = repo_delete_q(id, user.id)
 
-        row = conn.execute("SELECT * FROM web_quotations WHERE id=? AND user_id=?", [id, uid]).fetchone()
-
-        if row:
-
-            if row["file_path"] and os.path.isfile(row["file_path"]):
-
-                try:
-
-                    os.remove(row["file_path"])
-
-                except Exception:
-
-                    pass
-
-            conn.execute("DELETE FROM web_quotations WHERE id=? AND user_id=?", [id, uid])
-
-            conn.commit()
-    finally:
-        conn.close()
+    if file_path and os.path.isfile(file_path):
+        try:
+            os.remove(file_path)
+        except Exception:
+            pass
 
     return {"status": "deleted"}
 
@@ -1764,32 +1616,8 @@ async def batch_delete_quotations(ids: str = Form(...), user: dict = Depends(get
 
     id_list = json.loads(ids)
 
-    uid = str(user.id)
-
-    conn = _get_products_db()
-    try:
-        count = 0
-
-        for qid in id_list:
-
-            row = conn.execute("SELECT * FROM web_quotations WHERE id=? AND user_id=?", [qid, uid]).fetchone()
-
-            if row:
-
-                if row["file_path"] and os.path.isfile(row["file_path"]):
-
-                    try: os.remove(row["file_path"])
-
-                    except Exception: pass
-
-                conn.execute("DELETE FROM web_quotations WHERE id=? AND user_id=?", [qid, uid])
-
-                count += 1
-
-        conn.commit()
-    finally:
-        conn.close()
-
+    from product_repo import batch_delete_quotations as repo_batch_q
+    count = repo_batch_q([int(x) for x in id_list], user.id)
     return {"status": "deleted", "count": count}
 
 
@@ -1846,16 +1674,9 @@ async def generate_quotation_pdf(
 
         if user:
 
-            conn = _get_products_db()
-            try:
-                conn.execute("INSERT INTO web_quotations (user_id, product_ids, file_name, file_path) VALUES (?,?,?,?)",
-
-                    [str(user.id), json.dumps(items), f"报价单PDF_{ts}.pdf", str(output_path)])
-
-                conn.commit()
-                pdf_qid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-            finally:
-                conn.close()
+            from product_repo import save_quotation
+            pdf_qid = save_quotation(user.id, json.dumps(items),
+                f"报价单PDF_{ts}.pdf", str(output_path))
 
     except Exception as e:
 
@@ -1977,16 +1798,9 @@ async def generate_pi(
 
         if user:
 
-            conn = _get_products_db()
-            try:
-                conn.execute("INSERT INTO web_quotations (user_id, product_ids, file_name, file_path) VALUES (?,?,?,?)",
-
-                    [str(user.id), json.dumps(items), f"形式发票_{ts}.xlsx", str(result_path)])
-
-                conn.commit()
-                pi_qid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-            finally:
-                conn.close()
+            from product_repo import save_quotation
+            pi_qid = save_quotation(user.id, json.dumps(items),
+                f"形式发票_{ts}.xlsx", str(result_path))
 
     except Exception as e:
 
@@ -2075,16 +1889,9 @@ async def generate_packing(
 
         if _pro_user:
 
-            conn = _get_products_db()
-            try:
-                conn.execute("INSERT INTO web_quotations (user_id, product_ids, file_name, file_path) VALUES (?,?,?,?)",
-
-                    [str(_pro_user.id), json.dumps(items), f"装箱单_{ts}.xlsx", str(result_path)])
-
-                conn.commit()
-                pk_qid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-            finally:
-                conn.close()
+            from product_repo import save_quotation
+            pk_qid = save_quotation(_pro_user.id, json.dumps(items),
+                f"装箱单_{ts}.xlsx", str(result_path))
 
     except Exception as e:
 
@@ -2191,16 +1998,9 @@ async def generate_invoice(
 
         if _pro_user:
 
-            conn = _get_products_db()
-            try:
-                conn.execute("INSERT INTO web_quotations (user_id, product_ids, file_name, file_path) VALUES (?,?,?,?)",
-
-                    [str(_pro_user.id), json.dumps(items), f"商业发票_{ts}.xlsx", str(result_path)])
-
-                conn.commit()
-                inv_qid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-            finally:
-                conn.close()
+            from product_repo import save_quotation
+            inv_qid = save_quotation(_pro_user.id, json.dumps(items),
+                f"商业发票_{ts}.xlsx", str(result_path))
 
     except Exception as e:
 

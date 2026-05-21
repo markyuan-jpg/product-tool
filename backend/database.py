@@ -37,6 +37,7 @@ else:
     # statement_cache_size=0 required for Supavisor/PgBouncer pooler
     engine = create_async_engine(
         DATABASE_URL, echo=False, pool_size=5, max_overflow=10,
+        pool_pre_ping=True,
         connect_args={"statement_cache_size": 0}
     )
 async_session_factory = async_sessionmaker(engine, expire_on_commit=False)
