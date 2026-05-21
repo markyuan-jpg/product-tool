@@ -146,7 +146,8 @@ Pro 升级返回 502。如需启用，在 `backend/.env` 中配置。
 | Railway | `CREEM_API_KEY` | 可选 | Creem 支付 |
 | Railway | `CREEM_WEBHOOK_SECRET` | 可选 | Creem Webhook 签名 |
 | Railway | `CREEM_PRODUCT_ID_PRO` | 可选 | Creem 产品 ID |
-| Railway | `GEMINI_API_KEY` | 可选 | AI 列检测 |
+ | Railway | `GEMINI_API_KEY` | 可选 | AI 列检测（已弃用，改用 DeepSeek） |
+| Railway | `DEEPSEEK_API_KEY` | ✅ | DeepSeek AI（智能粘贴 + AI 列检测） |
 | Vercel | `NEXT_PUBLIC_API_URL` | ✅ | Railway 后端域名（如 `https://xxx.up.railway.app`） |
 
 ---
@@ -162,3 +163,108 @@ Pro 升级返回 502。如需启用，在 `backend/.env` 中配置。
 | `Build skipped` / watchPatterns 不触发 | `watchPatterns` 不包含根文件 | 加上 `"requirements.txt"` 和 `"railway.json"` |
 | `unable to open database file` | `~/.product_tool/` 目录不存在 | 确保 `_init_products_db()` 中 `mkdir(parents=True)` |
 | 图片加载被 CSP 拦截 | `img-src` 没有允许 Railway 域名 | `next.config.mjs` 的 `img-src` 加上 `https://*.up.railway.app` |
+| `connect-src` 限制 API 地址 | 后端换了端口/域名时未更新 CSP | `next.config.mjs` 的 `connect-src` 加上对应地址 |
+
+---
+
+## 国际化 (i18n)
+
+前端全站支持中/英文切换，基于 Context API。
+
+### 框架结构
+
+| 文件 | 作用 |
+|------|------|
+| `landing/lib/i18n.js` | `LocaleProvider` / `useLocale()` hook / `t()` 翻译函数 |
+| `landing/lib/locale.js` | IP 检测 + localStorage 持久化 |
+| `landing/components/LocaleToggle.js` | 右上角 EN/中文 切换按钮 |
+| `landing/translations/zh.json` | 中文翻译词条 |
+| `landing/translations/en.json` | 英文翻译词条 |
+
+### 语言检测优先级
+
+1. localStorage `app_locale`（用户手动切换后持久化）
+2. ip-api.com IP 定位（CN→zh，其他→en）
+3. 兜底：zh
+
+### 使用方式
+
+```javascript
+import { useLocale, t } from '@/lib/i18n';
+
+function Component() {
+  const { locale, ready } = useLocale();
+  if (!ready) return null;
+  return <p>{t('nav.home', locale)}</p>;
+}
+```
+
+### 已覆盖页面
+
+首页、工作原理、定价、登录、注册、忘记密码、支付结果、账户设置、工作台（含产品库/报价历史）、Nav、Footer、ErrorBoundary。
+
+---
+
+## 智能粘贴 (Smart Paste)
+
+Pro 用户专属功能，粘贴任意格式产品文本 → AI 自动提取结构化数据。
+
+### 工作流程
+
+1. workspace 页面切换到「智能粘贴」tab
+2. 粘贴产品描述（微信/邮件/笔记等任意格式）
+3. 可选：拖入图片（文件名含型号自动匹配）
+4. 点击「解析」→ 后端调 DeepSeek 提取产品
+5. 结果展示在已有产品表格，可编辑后保存/生成报价单
+
+### 后端
+
+- 端点：`POST /api/parse-text-products`（需 Pro 用户）
+- AI：`call_deepseek()` in `backend/ai_parser.py`
+- 模型：`deepseek-chat`（DeepSeek 官方 API）
+
+---
+
+## 解析器修复记录
+
+### DOCX 解析器 (`doc_parser.py`)
+
+| 问题 | 修复 |
+|------|------|
+| 价格列被放进规格 | 表头匹配优先于内容推断（+8 分加权） |
+| 编造价格（Moq 列误当价格） | `/box` `/pc` 后缀值排除出价格检测 |
+| spec 含 Photo/Moq 等无关列 | 移除未映射列收集逻辑 |
+| 表头值泄漏到数据行 | 首行不参与垂直合并传播 |
+| 无型号列时 model 为空 | 用 name 作为 model |
+| qty 没映射 | 添加 'moq' 到 qty 关键字 |
+| 币种未识别 | 从价格列表头文本检测 USD/CNY |
+| 图片按文件名顺序错配 | 解析 XML 检测每个单元格是否真有图片，按 `_row` 匹配 |
+
+### Excel 解析器 (`excel_parser_v3.py`)
+
+| 问题 | 修复 |
+|------|------|
+| 未映射列塞进 spec | 移除收集逻辑（同 doc_parser） |
+
+### PDF 解析器 (`pdf_parser.py`)
+
+| 问题 | 修复 |
+|------|------|
+| 表头值泄漏到数据行 | 首行不改值，只记录 |
+| 图片位置硬塞 | 型号→文件名匹配不到就留空 |
+
+### 图片匹配 (`image.py`)
+
+| 问题 | 修复 |
+|------|------|
+| Excel 图片扩散到相邻产品 | 移除扩散逻辑 |
+| 兜底时循环分配 | 只在序号范围内分配，不循环 |
+
+### 报价单生成 (`quotation_excel.py`)
+
+| 问题 | 修复 |
+|------|------|
+| USD 价格重复换算 | 检查产品原始 currency，仅非 USD 才换算 |
+| 价格单元格格式为「自定义」非数值 | 显式设 `number_format = '#,##0.00'` |
+| qty 单元格格式非数值 | 显式设 `number_format = '#,##0'` |
+| 多价格不显示 | `price_raw` 追加到 spec 列 |
