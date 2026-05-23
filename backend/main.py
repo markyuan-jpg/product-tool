@@ -1170,7 +1170,18 @@ async def parse_file(
                 uni_score = score_dataframe(df)
                 spec_score = score_dataframe(df2)
 
-                if spec_score['score'] > uni_score['score']:
+                # 比较"优质产品数"而非总分，避免"2个完美品 > 25个合格品"
+                from score import score_product_row as _spr
+                def _count_good(df_):
+                    if df_ is None or len(df_) == 0:
+                        return 0
+                    return sum(1 for _, r_ in df_.iterrows()
+                               if _spr(str(r_.get('model','')), r_.get('price_rmb'), str(r_.get('spec_zh',''))) > 0)
+
+                uni_good = _count_good(df)
+                spec_good = _count_good(df2)
+
+                if spec_good > uni_good or (spec_good == uni_good and spec_score['score'] > uni_score['score']):
                     df = df2
                     parse_source = 'specialized'
 
