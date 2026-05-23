@@ -5,6 +5,6 @@ export default function robots() {
       allow: '/',
       disallow: ['/workspace/', '/login/', '/register/', '/forgot-password/', '/account/', '/api/'],
     },
-    sitemap: 'https://quotation-tool.vercel.app/sitemap.xml',
+    sitemap: 'https://quoteflow.it.com/sitemap.xml',
   };
 }
