@@ -1,0 +1,23 @@
+name: Deploy to Alibaba Cloud VPS
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd /root/product-tool
+            git pull
+            kill $(pgrep -f uvicorn) 2>/dev/null || true
+            cd backend
+            nohup /root/product-tool/venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2 > app.log 2>&1 &
+            echo "Deploy complete"
