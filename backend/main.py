@@ -1230,6 +1230,18 @@ async def parse_file(
 
             df['model'] = df.groupby((df['model'] != '').cumsum())['model'].transform('first')
 
+        # 币种兜底：如果所有产品都没有币种，检查数据中是否含USD/FOB信号
+        if 'currency' not in df.columns or df['currency'].isna().all() or (df['currency'] == '').all():
+            # 检查有价格的产品，如果价格 > 500 且 spec 不含明显人民币信号，则设为 USD
+            has_price_col = 'price_rmb' in df.columns
+            if has_price_col:
+                prices = [p for p in df['price_rmb'] if isinstance(p, (int, float)) and p > 0]
+                if prices:
+                    avg_price = sum(prices) / len(prices)
+                    if avg_price > 500:
+                        df['currency'] = 'USD'
+                    else:
+                        df['currency'] = 'CNY'
 
         products = df.fillna('').to_dict(orient='records')
 

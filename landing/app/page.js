@@ -217,9 +217,9 @@ export default function Home() {
                       <table className="prod-table">
                         <thead><tr><th>{t('home.model', locale)}</th><th>{t('home.name', locale)}</th><th>{t('home.spec', locale)}</th><th>{t('home.price', locale)}</th></tr></thead>
                         <tbody>{activeProducts.slice(0, 50).map((p, i) => (
-                          <tr key={i}><td className="font-mono text-[0.75rem]">{p.model || '-'}</td>
-                          <td className="max-w-[140px]">{p.name_zh || p.name_en || '-'}</td>
-                          <td className="max-w-[160px] text-[var(--text-secondary)]">{p.spec_zh || p.spec_en || '-'}</td>
+                          <tr key={i}><td className="font-mono text-[0.75rem] max-w-[100px] overflow-hidden text-ellipsis whitespace-nowrap" title={p.model}>{p.model || '-'}</td>
+                          <td className="max-w-[140px] overflow-hidden text-ellipsis whitespace-nowrap" title={p.name_zh || p.name_en}>{p.name_zh || p.name_en || '-'}</td>
+                          <td className="max-w-[160px] overflow-hidden text-ellipsis whitespace-nowrap" title={p.spec_zh || p.spec_en}>{p.spec_zh || p.spec_en || '-'}</td>
                           <td className="font-medium">{p.currency === 'USD' ? '$' : '¥'}{p.price_rmb || '-'}</td></tr>
                         ))}</tbody>
                       </table>

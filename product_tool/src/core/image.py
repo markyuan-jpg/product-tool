@@ -678,7 +678,7 @@ def match_images_to_products(df, file_path: str) -> 'pd.DataFrame':
 
         for s_name, s_rows in img_map.items():
             if _sheet_matches(sheet, s_name):
-                for delta in [-1, 1]:
+                for delta in [-2, -1, 1, 2]:
                     candidate = row_num + delta
                     if candidate in s_rows:
                         return s_rows[candidate]

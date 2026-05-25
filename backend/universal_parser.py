@@ -25,6 +25,18 @@ _NON_PRODUCT_MODEL_PATTERNS = [
     re.compile(r'^(\u00a5|\$|eur|usd|cny)\s*[\d,]+', re.I),
     # Company info lines: "公司名称", "供应商", "客户"
     re.compile(r'^(company|supplier|customer|buyer|seller)(\s|$)', re.I),
+    # Chinese numbered clauses: "1. 本合同签订...", "4. 摩托车品牌..."
+    re.compile(r'^\d+[.、]\s*[（(]?\s*(本合|支付|交[货付]|运[输送]|包[装]|条[款]|备[注]|说[明]|地[址]|电[话]|日[期]|银[行]|账[户]|签[名字]|仲裁|保险)', re.I),
+    # Document titles and address lines
+    re.compile(r'^(proforma\s+invoice|sales\s+contract|to\s*:|the\s+(seller|buyer)|sign(ed|ature)|date\s+of\s+)', re.I),
+    # Total payment text lines
+    re.compile(r'^total\s+payment', re.I),
+    # Port/brand/shipping clause lines
+    re.compile(r'^\d+[.、]\s*(port\s+of|brand\s+name|handling\s+method|other\s+notices|motorcycle\s+brand)', re.I),
+    # Signature and stamp lines
+    re.compile(r'^\(signed|\(stamp|\(seal|signature\s+by|authorized\s+sign', re.I),
+    # Auto-generated model placeholders
+    re.compile(r'^(产品_r\d+|商品_×\d+)$'),
 ]
 
 
@@ -349,6 +361,15 @@ def map_columns(ws, header_row: int) -> dict:
                     break
             if 'price_col' not in col_map:
                 col_map['price_col'] = available[-1]  # 兜底取最后一列
+
+    # 币种检测：从表头行找 USD/FOB 标记
+    price_col = col_map.get('price_col')
+    if price_col is not None:
+        header_text = str(ws.cell(header_row, price_col + 1).value or '').lower()
+        if any(kw in header_text for kw in ['usd', 'fob', '$']):
+            col_map['currency'] = 'USD'
+        elif any(kw in header_text for kw in ['rmb', 'cny', '¥', '元']):
+            col_map['currency'] = 'CNY'
 
     if 'spec_col' not in col_map and 'name_col' in col_map:
         col_map['spec_col'] = col_map['name_col'] + 1 if col_map['name_col'] + 1 < max_col else col_map['name_col']

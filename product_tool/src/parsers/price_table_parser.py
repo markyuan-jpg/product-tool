@@ -27,18 +27,20 @@ SPEC_COLUMNS = {
 
 
 def parse_price_table(file_path: str) -> pd.DataFrame:
-    """
-    解析 车型价格表
-    
-    提取:
-    - Col 2: 型号
-    - Col 4: 价格
-    - Col 6-12: 所有规格列
-    
-    返回: DataFrame [model, spec_zh, price_rmb, motor_type, motor_power, ...]
-    """
+    """解析价格表（多列布局）"""
     wb = load_workbook(file_path, data_only=True, read_only=True)
     ws = wb.active
+    
+    # 检测币种：扫描前20行找USD/FOB标记
+    currency = 'CNY'
+    for r in range(1, min(ws.max_row + 1, 21)):
+        for c in range(1, min(ws.max_column + 1, 15)):
+            v = str(ws.cell(r, c).value or '').lower()
+            if any(kw in v for kw in ['usd', 'fob', '$', 'cif']):
+                currency = 'USD'
+                break
+        if currency == 'USD':
+            break
     
     result = []
     last_model = None
@@ -95,6 +97,7 @@ def parse_price_table(file_path: str) -> pd.DataFrame:
             'model': model,
             'spec_zh': spec_zh,
             'price_rmb': price,
+            'currency': currency,
             '_row': r,
             '_sheet': ws.title,
         }
