@@ -5,8 +5,6 @@
   "deploy": {
     "startCommand": "cd backend && python -m uvicorn main:app --host 0.0.0.0 --port $PORT",
     "healthcheckPath": "/api/health",
-    "restartPolicyType": "always",
-    "sleepOnIdle": true,
-    "idleTimeoutMinutes": 5
+    "restartPolicyType": "always"
   }
 }
