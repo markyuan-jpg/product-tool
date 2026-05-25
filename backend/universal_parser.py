@@ -11,6 +11,57 @@ from openpyxl import load_workbook
 
 logger = logging.getLogger(__name__)
 
+# 非产品行过滤模式 — 这些模式匹配的行不应被当作产品
+_NON_PRODUCT_MODEL_PATTERNS = [
+    # English field labels: "CONTRACT NO.:", "SELLER:", "Email: ..."
+    re.compile(r'^(contract|seller|buyer|payment|shipping|delivery|transshipment|remarks?|note|terms|conditions?|address|tel[.:\s]|fax[.:\s]|email|phone|website|bank|account|beneficiary|swift|contact|signature|date|invoice|validity|description)', re.I),
+    # Totals and subtotals
+    re.compile(r'^(total\s+amount|total\s+payment|grand\s+total|sub\s*total)', re.I),
+    # Numbered clauses: "5. Transshipment:", "8. Bank Information:"
+    re.compile(r'^\d+[.、\s]\s*(transshipment|payment|delivery|packing|insurance|bank|inspection|arbitration|force\s*majeure|shipping|terms?|conditions?)', re.I),
+    # Chinese field labels: "付款方式：", "合同编号："
+    re.compile(r'^(合同|卖方|买方|付款|交货|运输|包装|条款|备注|说明|地址|电话|邮箱|日期|受益|银行|账户|签名|签字|合计|总计|金额|小计|编号|序号)', re.I),
+    # Bare price/currency lines: "$ 1,000", "USD 500"
+    re.compile(r'^(\u00a5|\$|eur|usd|cny)\s*[\d,]+', re.I),
+    # Company info lines: "公司名称", "供应商", "客户"
+    re.compile(r'^(company|supplier|customer|buyer|seller)(\s|$)', re.I),
+]
+
+
+def _filter_non_product_rows(df):
+    """过滤明显不是产品的行（合同条款、字段名、纯中文句子等）"""
+    if df is None or df.empty:
+        return df
+
+    if 'model' not in df.columns:
+        return df
+
+    mask = pd.Series(True, index=df.index)
+    for idx, row in df.iterrows():
+        m = str(row.get('model', '')).strip()
+        if not m:
+            mask.at[idx] = False
+            continue
+
+        # Normalize non-breaking spaces
+        m_norm = m.replace('\xa0', ' ')
+
+        for pat in _NON_PRODUCT_MODEL_PATTERNS:
+            if pat.search(m_norm):
+                mask.at[idx] = False
+                break
+
+        if not mask.at[idx]:
+            continue
+
+        # Chinese sentence check (not a product)
+        chinese_chars = len(re.findall(r'[\u4e00-\u9fff]', m))
+        if chinese_chars > 8 and len(m) > 12:
+            mask.at[idx] = False
+
+    return df[mask]
+
+
 # ─── 关键词映射（来自共享常量） ───
 
 try:
@@ -725,7 +776,10 @@ def _parse_sheet(ws) -> pd.DataFrame:
             score = score_result(df_kv)
             candidates.append((df_kv, 'kv', score))
             if score >= 5 or (len(df_kv) >= 5 and score >= 3):
-                return max(candidates, key=lambda c: c[2])[0]
+                df_best = max(candidates, key=lambda c: c[2])[0]
+                df_best = _filter_non_product_rows(df_best)
+                if not df_best.empty:
+                    return df_best
 
     # 策略2: 表格布局（关键词映射）
     col_map = map_columns(ws, header_row)
@@ -735,7 +789,10 @@ def _parse_sheet(ws) -> pd.DataFrame:
             score = score_result(df_tbl)
             candidates.append((df_tbl, 'table', score))
             if score >= 5 or (len(df_tbl) >= 5 and score >= 3):
-                return max(candidates, key=lambda c: c[2])[0]
+                df_best = max(candidates, key=lambda c: c[2])[0]
+                df_best = _filter_non_product_rows(df_best)
+                if not df_best.empty:
+                    return df_best
 
     # 策略3: 内容驱动
     df_content = parse_by_content(ws, header_row)
@@ -743,7 +800,10 @@ def _parse_sheet(ws) -> pd.DataFrame:
         score = score_result(df_content)
         candidates.append((df_content, 'content', score))
         if score >= 5 or (len(df_content) >= 5 and score >= 3):
-            return max(candidates, key=lambda c: c[2])[0]
+            df_best = max(candidates, key=lambda c: c[2])[0]
+            df_best = _filter_non_product_rows(df_best)
+            if not df_best.empty:
+                return df_best
 
     # 策略4: 无表头模式
     if header_row <= 1:
@@ -754,7 +814,9 @@ def _parse_sheet(ws) -> pd.DataFrame:
 
     candidates = [(df, t) for df, t, _ in candidates if isinstance(df, pd.DataFrame) and not df.empty]
     if candidates:
-        return max(candidates, key=lambda c: score_result(c[0]))[0]
+        best = max(candidates, key=lambda c: score_result(c[0]))[0]
+        best = _filter_non_product_rows(best)
+        return best
     return pd.DataFrame()
 
 

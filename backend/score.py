@@ -11,6 +11,62 @@ _AUTO_MODEL_RE = re.compile(r'^(商品_?R\d+|PRODUCT_\d+|Item_\d+|\u5546\u54c1_\
 _REAL_MODEL_RE = re.compile(r'[A-Za-z]')
 _REAL_DIGIT_RE = re.compile(r'\d')
 
+# 已知字段/条款名 — 这些不应被当作产品型号
+_FIELD_NAMES = {
+    'contract', 'seller', 'buyer', 'payment', 'shipping', 'delivery',
+    'transshipment', 'remarks', 'note', 'terms', 'conditions',
+    'address', 'tel', 'fax', 'email', 'website', 'phone',
+    'bank', 'account', 'beneficiary', 'swift', 'sort code',
+    'contact', 'signature', 'date', 'invoice', 'validity',
+    'total', 'subtotal', 'amount', '合计', '总计', '金额', '小计',
+    '包装', '运输', '付款', '交货', '条款', '备注', '说明',
+    '合同', '卖方', '买方', '地址', '电话', '邮箱', '日期',
+    '受益', '银行', '账户', '签名', '签字',
+    'description', 'product', 'model', 'item', 'specification',
+    'hs code', 'origin', 'manufacturer', 'brand',
+}
+
+# 单独的条款关键词（用于contains检查，比_FIELD_NAMES的精确匹配宽松）
+_TERM_KEYWORDS = ['transshipment', 'payment', 'delivery', 'shipping', 'bank',
+                  'contract', 'invoice', 'signature', 'validity', 'beneficiary',
+                  '条款', '付款', '交货', '运输', '银行', '合同', '日期', '签字', '签名',
+                  'seal', 'stamp', '仲裁', '保险', '不可抗力']
+
+
+def _contains_field_keyword(m: str) -> bool:
+    """检查 model 是否包含已知的字段/条款关键词（作为独立词）"""
+    ml = m.lower().strip().rstrip(':').rstrip('：').rstrip('.').rstrip(')').rstrip('）')
+    # 精确匹配
+    if ml in _FIELD_NAMES:
+        return True
+    # 开头匹配（如 "CONTRACT NO." → "contract" 开头）
+    if any(ml.startswith(kw) for kw in _FIELD_NAMES if kw):
+        return True
+    # 含有关键词做子词（如 "5. transshipment" → "transshipment"）
+    for kw in _TERM_KEYWORDS:
+        if re.search(r'\b' + re.escape(kw) + r'\b', ml):
+            return True
+    return False
+
+
+def _is_reasonable_price(p):
+    """价格应该在一个合理的范围内（不是年份、序号等）"""
+    if p is None:
+        return False
+    # 排除年份（2024~2029）
+    if 2024 <= p <= 2029:
+        return False
+    # 排除纯序号（1~50的整数）
+    if 1 <= p <= 50 and p == int(p):
+        return False
+    # 排除极小值
+    if p <= 0.5:
+        return False
+    # 排除极大值
+    if p >= 10000000:
+        return False
+    return True
+
 
 def score_product_row(model: str, price, spec_zh: str) -> float:
     """对单个产品行评分"""
@@ -18,17 +74,23 @@ def score_product_row(model: str, price, spec_zh: str) -> float:
     p = price if isinstance(price, (int, float)) else None
     spec = str(spec_zh).strip() if spec_zh else ''
 
-    has_price = p is not None and p > 0
+    has_price = _is_reasonable_price(p)
     has_spec = len(spec) > 30
     is_empty = not m or len(m) < 2
 
-    # 真型号检查
+    # 检查model是否包含条款/字段关键词
+    _has_field_kw = _contains_field_keyword(m)
+
+    # 真型号检查 - 加强版
     is_real = (
         2 <= len(m) <= 30
         and bool(_REAL_MODEL_RE.search(m))
-        and bool(_REAL_DIGIT_RE.search(m))
         and ':' not in m
         and '\uff1a' not in m
+        and not _has_field_kw
+        and len(re.findall(r'[\u4e00-\u9fff]', m)) <= 6  # 中文不超过6字（排除纯中文句子）
+        # 必须有数字，或者短字母型号+价格（如 "XP" price=850）
+        and (bool(_REAL_DIGIT_RE.search(m)) or (has_price and len(m) <= 5))
     )
 
     # 假型号检查
@@ -46,8 +108,14 @@ def score_product_row(model: str, price, spec_zh: str) -> float:
 
     # ---- 弱信号 ----
     if has_price and not is_empty:
+        # 额外检查：model含字段/条款关键词 → 垃圾
+        if _has_field_kw:
+            return -1.0
         return 1.0
     if m and not is_fake and not is_empty:
+        # 额外检查：model含字段/条款关键词 → 垃圾
+        if _has_field_kw:
+            return -1.0
         return 1.0   # 有内容但非标准型号
 
     # ---- 噪音/错误 ----

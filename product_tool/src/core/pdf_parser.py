@@ -181,13 +181,18 @@ def extract_tables_from_pdf(pdf_path: str, return_positions: bool = False) -> Li
                     # Get each row's bbox
                     row_bboxes = []
                     # tbl.rows gives CellGroups; each CellGroup has cells with bboxes
+                    # Note: Some cells may be None (empty/merged), so filter them
                     for row_group in tbl.rows:
-                        # Union of all cells in this row gives the row bbox
-                        rx0 = min(c[0] for c in row_group.cells)
-                        ry0 = min(c[1] for c in row_group.cells)
-                        rx1 = max(c[2] for c in row_group.cells)
-                        ry1 = max(c[3] for c in row_group.cells)
-                        row_bboxes.append((rx0, ry0, rx1, ry1))
+                        valid_cells = [c for c in row_group.cells if c is not None]
+                        if valid_cells:
+                            rx0 = min(c[0] for c in valid_cells)
+                            ry0 = min(c[1] for c in valid_cells)
+                            rx1 = max(c[2] for c in valid_cells)
+                            ry1 = max(c[3] for c in valid_cells)
+                            row_bboxes.append((rx0, ry0, rx1, ry1))
+                        else:
+                            # No valid cells - use previous row's bbox or zero
+                            row_bboxes.append((0, 0, 0, 0))
                     
                     all_tables.append({
                         'page': page.page_number,
@@ -809,93 +814,157 @@ def extract_products_from_pdf_v2(pdf_path: str) -> Optional[pd.DataFrame]:
         first_col_vals = [str(row[0] or '').strip() for row in target_table[1:21] if row and row[0]]
         param_val_count = sum(1 for v in first_col_vals if _is_param_name(v))
         num_data_cols = max(0, len(target_table[0]) - 1) if target_table else 0
-        is_kv_spec = num_data_cols <= 2 and len(first_col_vals) >= 3 and param_val_count > len(first_col_vals) * 0.6
+        is_multi_kv = num_data_cols > 2 and len(first_col_vals) >= 3 and param_val_count > len(first_col_vals) * 0.6
+        is_kv_spec = (num_data_cols <= 2 and len(first_col_vals) >= 3 and param_val_count > len(first_col_vals) * 0.6) or is_multi_kv
         
         if is_kv_spec:
-            # KV规格表：所有行合并为一个产品
-            model_name = ''
-            all_specs = []
-            found_price = None
-            found_currency = 'CNY'
-            for row in target_table:
-                if not row or not row[0]:
-                    continue
-                key = str(row[0]).strip()
-                val = str(row[1]).strip() if len(row) > 1 and row[1] else ''
-                key_lower = key.lower().rstrip(':：（）()').strip()
-                
-                # 检测型号行（匹配 "Model(产品型号)" "Model:" 等）
-                if key_lower.startswith('model') and len(key_lower) < 20:
-                    model_name = val or key
-                    continue
-                
-                # 检测价格（精确匹配：英文词用边界，中文词要求出现在最后30字）
-                is_price_line = False
-                for kw in ['price', 'exw']:
-                    if re.search(r'\b' + kw + r'\b', key_lower):
-                        is_price_line = True
+            if is_multi_kv:
+                # Multi-product comparison table (Model: S500 | S400 | S300)
+                model_row_idx = None
+                for idx, row in enumerate(target_table):
+                    first_cell = str(row[0] if row else '').strip().lower().rstrip(':').rstrip('：')
+                    if first_cell in ('model', '型号', '产品型号') or first_cell.startswith('model'):
+                        model_row_idx = idx
                         break
-                for kw in ['价格', '出厂价', '出厂']:  # 精确匹配
-                    if kw in key_lower:
+                
+                if model_row_idx is not None:
+                    model_row = target_table[model_row_idx]
+                    product_names = []
+                    for ci in range(1, len(model_row)):
+                        val = str(model_row[ci] or '').strip()
+                        if val:
+                            product_names.append((ci, val))
+                    
+                    if product_names:
+                        multi_products = []
+                        for col_idx, prod_name in product_names:
+                            p = {
+                                'model': prod_name.split()[0] if prod_name else prod_name,
+                                'name_zh': prod_name,
+                                'price_rmb': 0,
+                                'spec_zh': '',
+                                'currency': 'CNY',
+                                '_image_path': '',
+                                '_source_file': pdf_path,
+                            }
+                            specs = []
+                            for row in target_table[model_row_idx + 1:]:
+                                if not row or len(row) <= col_idx:
+                                    continue
+                                param_name = str(row[0] or '').strip()
+                                param_val = str(row[col_idx] or '').strip()
+                                if not param_val:
+                                    continue
+                                
+                                # Check if this is a price row
+                                price_kw = ['price', 'usd', '出厂价', '价格', '报价', 'exw']
+                                param_lower = param_name.lower()
+                                if any(kw in param_lower for kw in price_kw) or '$' in param_name:
+                                    nums = re.findall(r'([\d,]+(?:\.\d+)?)', param_val.replace(',', ''))
+                                    if nums:
+                                        try:
+                                            p['price_rmb'] = float(nums[0])
+                                            if 'usd' in param_lower or '$' in param_name or 'usd' in param_val.lower():
+                                                p['currency'] = 'USD'
+                                            continue
+                                        except ValueError:
+                                            pass
+                                
+                                if param_val:
+                                    specs.append(f"{param_name}: {param_val}")
+                            
+                            if specs:
+                                p['spec_zh'] = '; '.join(specs[:30])
+                            multi_products.append(p)
+                        
+                        if multi_products:
+                            df_multi = pd.DataFrame(multi_products)
+                            candidates.append(('col_based', df_multi))
+            else:
+                # KV规格表：所有行合并为一个产品
+                model_name = ''
+                all_specs = []
+                found_price = None
+                found_currency = 'CNY'
+                for row in target_table:
+                    if not row or not row[0]:
+                        continue
+                    key = str(row[0]).strip()
+                    val = str(row[1]).strip() if len(row) > 1 and row[1] else ''
+                    key_lower = key.lower().rstrip(':：（）()').strip()
+                    
+                    # 检测型号行（匹配 "Model(产品型号)" "Model:" 等）
+                    if key_lower.startswith('model') and len(key_lower) < 20:
+                        model_name = val or key
+                        continue
+                    
+                    # 检测价格（精确匹配：英文词用边界，中文词要求出现在最后30字）
+                    is_price_line = False
+                    for kw in ['price', 'exw']:
+                        if re.search(r'\b' + kw + r'\b', key_lower):
+                            is_price_line = True
+                            break
+                    for kw in ['价格', '出厂价', '出厂']:  # 精确匹配
+                        if kw in key_lower:
+                            is_price_line = True
+                            break
+                    # '报价'可能出现在"工厂报价"等复合词中 → 只在最后30字才算
+                    if not is_price_line and '报价' in key_lower[-30:]:
                         is_price_line = True
-                        break
-                # '报价'可能出现在"工厂报价"等复合词中 → 只在最后30字才算
-                if not is_price_line and '报价' in key_lower[-30:]:
-                    is_price_line = True
+                    
+                    if is_price_line:
+                        nums = re.findall(r'[\d,]+(?:\.\d+)?', val.replace(',', ''))
+                        if nums:
+                            try:
+                                # 优先取 USD/CNY 旁边的数字，否则取最后一个
+                                p = None
+                                for ni, n in enumerate(nums):
+                                    pos = val.find(n)
+                                    after = val[pos + len(n):pos + len(n) + 10].lower()
+                                    before = val[max(0, pos - 10):pos].lower()
+                                    if 'usd' in after or 'usd' in before or '$' in after:
+                                        p = float(n)
+                                        found_currency = 'USD'
+                                        break
+                                    if 'cny' in after or 'cny' in before:
+                                        p = float(n)
+                                        found_currency = 'CNY'
+                                        break
+                                if p is None:
+                                    p = float(nums[-1])
+                                if p and p > 0:
+                                    found_price = max(found_price or 0, p)
+                            except Exception:
+                                pass
+                        continue
+                    
+                    # 跳过标题行（长文本、specification等）
+                    if len(key) > 30 and not val:
+                        if not model_name:
+                            # 从标题提取型号（"G5000 E-motorcycle..." → "G5000"）
+                            words = key.split()
+                            if words:
+                                model_name = words[0]
+                        continue
+                    
+                    if val:
+                        all_specs.append(f"{key}: {val}")
+                    elif key:
+                        all_specs.append(key)
                 
-                if is_price_line:
-                    nums = re.findall(r'[\d,]+(?:\.\d+)?', val.replace(',', ''))
-                    if nums:
-                        try:
-                            # 优先取 USD/CNY 旁边的数字，否则取最后一个
-                            p = None
-                            for ni, n in enumerate(nums):
-                                pos = val.find(n)
-                                after = val[pos + len(n):pos + len(n) + 10].lower()
-                                before = val[max(0, pos - 10):pos].lower()
-                                if 'usd' in after or 'usd' in before or '$' in after:
-                                    p = float(n)
-                                    found_currency = 'USD'
-                                    break
-                                if 'cny' in after or 'cny' in before:
-                                    p = float(n)
-                                    found_currency = 'CNY'
-                                    break
-                            if p is None:
-                                p = float(nums[-1])
-                            if p and p > 0:
-                                found_price = max(found_price or 0, p)
-                        except Exception:
-                            pass
-                    continue
-                
-                # 跳过标题行（长文本、specification等）
-                if len(key) > 30 and not val:
-                    if not model_name:
-                        # 从标题提取型号（"G5000 E-motorcycle..." → "G5000"）
-                        words = key.split()
-                        if words:
-                            model_name = words[0]
-                    continue
-                
-                if val:
-                    all_specs.append(f"{key}: {val}")
-                elif key:
-                    all_specs.append(key)
-            
-            if model_name:
-                merged_spec = '\n'.join(all_specs)
-                df_kv = pd.DataFrame([{
-                    'model': model_name.split()[0] if model_name else '',
-                    'name_zh': model_name.split()[0] if model_name else '',
-                    'price_rmb': found_price,
-                    'spec_zh': merged_spec,
-                    'currency': found_currency,
-                    '_image_path': '',
-                    '_source_file': pdf_path,
-                }])
-                if not df_kv.empty:
-                    candidates.append(('kv_spec', df_kv))
+                if model_name:
+                    merged_spec = '\n'.join(all_specs)
+                    df_kv = pd.DataFrame([{
+                        'model': model_name.split()[0] if model_name else '',
+                        'name_zh': model_name.split()[0] if model_name else '',
+                        'price_rmb': found_price,
+                        'spec_zh': merged_spec,
+                        'currency': found_currency,
+                        '_image_path': '',
+                        '_source_file': pdf_path,
+                    }])
+                    if not df_kv.empty:
+                        candidates.append(('kv_spec', df_kv))
         
         # 策略A: 布局检测提取
         layout = None

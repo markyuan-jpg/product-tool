@@ -854,6 +854,7 @@ def parse_excel_v3(file_path: str, wb=None) -> Optional[pd.DataFrame]:
                         break
             if _close_wb_classify:
                 wb.close()
+                wb = None  # 标记已关闭，fallback路径知道要重载
             
             # 使用新的专用解析器
             if layout == 'param_list':
