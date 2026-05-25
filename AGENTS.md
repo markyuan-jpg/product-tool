@@ -52,8 +52,8 @@ Pro 升级返回 502。如需启用，在 `backend/.env` 中配置。
 启用步骤：
 1. 注册 Creem → 创建产品 → 复制 Product ID 到 `CREEM_PRODUCT_ID_PRO`
 2. Creem Settings → API Keys → 复制 Secret Key 到 `CREEM_API_KEY`
-3. Creem Settings → Webhooks → 添加 URL `https://你的railway域名.up.railway.app/api/payment/webhook` → 复制 Signing Secret 到 `CREEM_WEBHOOK_SECRET`
-4. Railway → Variables → 加上这 3 个变量
+3. Creem Settings → Webhooks → 添加 URL `https://api.quoteflow.it.com/api/payment/webhook` → 复制 Signing Secret 到 `CREEM_WEBHOOK_SECRET`
+4. 在 `backend/.env` 或服务器环境变量加上这 3 个变量
 
 ## 解析器择优系统
 
@@ -65,105 +65,50 @@ Pro 升级返回 502。如需启用，在 `backend/.env` 中配置。
 评分维度：逐产品 7 级信号组合（真型号+价格+参数→+7） + 全局一致性加成。
 不再使用旧的数量比较逻辑（谁产品多选谁）。
 
-## 部署生产（Railway + Vercel）
+## 部署（VPS + Vercel）
 
-### ⚠️ 做对这几件事才能部署成功
+后端运行在阿里云轻量应用服务器（新加坡），前端托管在 Vercel。
 
-1. **`product_tool/` 必须在容器里** — Railway 的 Root Directory 必须**清空（空白）**，不能设成 `backend/`，否则 `product_tool/` 不会被复制进容器，所有 `from src.xxx import` 都会报错
-2. **`railway.json` 必须是 JSON 格式**（不能是 TOML）— 放在**项目根目录**，且在 Railway Dashboard 手动添加 Config File 路径
-3. **根目录必须有 `requirements.txt`** — Railpack 只扫描根目录检测 Python；`backend/requirements.txt` 不会被自动发现。内容直接写所有依赖，不能用 `-r backend/requirements.txt` 引用
-4. **`product_tool/.gitignore` 不要误杀 `src/output/`** — `output/` 这个规则会匹配 `product_tool/src/output/`，导致 `quotation_excel.py` 等文件被 git 忽略、部署失败
-5. **CSP 必须更新** — `landing/next.config.mjs` 的 `img-src` 需要加上 `https://*.up.railway.app`，否则产品图片被安全策略拦截（`Content Security Policy` 报错）
+### 后端部署（VPS）
 
----
+| 步骤 | 操作 |
+|------|------|
+| 1 | 购买 VPS（推荐 2 vCPU / 2GB 内存以上） |
+| 2 | 安装 Python 3.10+、pip、git |
+| 3 | `git clone` 项目到服务器 |
+| 4 | `python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt` |
+| 5 | 创建 `backend/.env`（见下方环境变量表） |
+| 6 | `nohup venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2 > app.log 2>&1 &` |
+| 7 | 设置防火墙开放 8000 端口（TCP） |
+| 8 | DNS：`api.quoteflow.it.com` → A 记录指向服务器 IP |
 
-### 步骤一：准备代码文件
+### 前端部署（Vercel）
 
-| 文件 | 位置 | 作用 |
-|------|------|------|
-| `vercel.json` | 项目根目录 | 告诉 Vercel 这是 Next.js 项目 |
-| `railway.json` | 项目根目录 | 告诉 Railway 构建和启动方式 |
-| `requirements.txt` | 项目根目录 | 根目录必须有一份，Railpack 依赖它 |
+| 步骤 | 操作 |
+|------|------|
+| 1 | Vercel 创建项目，关联 GitHub repo |
+| 2 | Root Directory 设为 `landing` |
+| 3 | 环境变量：`NEXT_PUBLIC_API_URL=https://api.quoteflow.it.com` |
 
-**`railway.json` 模板（必须放根目录）**
-```json
-{
-  "build": {
-    "watchPatterns": ["product_tool/**", "backend/**", "requirements.txt", "railway.json"]
-  },
-  "deploy": {
-    "startCommand": "cd backend && python -m uvicorn main:app --host 0.0.0.0 --port $PORT",
-    "healthcheckPath": "/api/health",
-    "restartPolicyType": "always",
-    "sleepOnIdle": true,
-    "idleTimeoutMinutes": 5
-  }
-}
-```
+### 环境变量（在 `backend/.env` 中设置）
 
-**`vercel.json` 模板（必须放根目录）**
-```json
-{ "framework": "nextjs" }
-```
+| 变量 | 必填 | 说明 |
+|------|:----:|------|
+| `JWT_SECRET_KEY` | ✅ | JWT 签名密钥 |
+| `BASE_URL` | ✅ | Vercel 前端域名，用于 CORS |
+| `DATABASE_URL` | 可选 | PostgreSQL 连接串（默认 SQLite） |
+| `DEEPSEEK_API_KEY` | ✅ | DeepSeek AI（智能粘贴 + AI 列检测） |
+| `CREEM_API_KEY` | 可选 | Creem 支付 |
+| `CREEM_WEBHOOK_SECRET` | 可选 | Creem Webhook 签名 |
+| `CREEM_PRODUCT_ID_PRO` | 可选 | Creem 产品 ID |
 
----
-
-### 步骤二：Vercel 部署前端
-
-| # | 操作 | 位置 |
-|---|------|------|
-| 1 | 创建项目，关联 GitHub repo | vercel.com → Add New → Project |
-| 2 | Framework Preset = Next.js（自动检测） | — |
-| 3 | Root Directory → 填入 `landing` | Settings → General → Root Directory |
-| 4 | 加环境变量 `NEXT_PUBLIC_API_URL` | Settings → Environment Variables |
-| 5 | 等部署完成，拿到域名（`xxx.vercel.app`） | Deployments |
-
-> 注意：`vercel.json` 里的 `rootDirectory` 字段 Vercel 不支持，必须在 Dashboard 手动设置。
-
----
-
-### 步骤三：Railway 部署后端
-
-| # | 操作 | 位置 |
-|---|------|------|
-| 1 | 创建项目，关联 GitHub repo，Service 选根目录 | railway.app → New Project → Deploy from GitHub |
-| 2 | **Root Directory 必须清空（空白）** | Settings → Root Directory |
-| 3 | 添加 Config File 路径 `railway.json` | Settings → Config-as-code → Railway Config File → Add File Path |
-| 4 | 加环境变量（见下表） | Variables → New Variable |
-| 5 | 触发部署 | Deploy 按钮 或 ⇧+Enter |
-| 6 | 拿到域名（`xxx.up.railway.app`） | Settings → Networking → Generate Domain（端口 8080） |
-
----
-
-### 步骤四：必设环境变量
-
-| 平台 | 变量 | 必填 | 说明 |
-|------|------|:----:|------|
-| Railway | `JWT_SECRET_KEY` | ✅ | JWT 签名密钥。生成：`python -c "import secrets; print(secrets.token_hex(32))"` |
-| Railway | `BASE_URL` | ✅ | Vercel 前端域名（如 `https://xxx.vercel.app`），用于 CORS 白名单 |
-| Railway | `DATABASE_URL` | 可选 | PostgreSQL 连接串（不填则默认用 SQLite） |
-| Railway | `PRODUCT_TOOL_DB_PATH` | 可选 | 产品库 SQLite 路径（默认 `~/.product_tool/products.db`） |
-| Railway | `CREEM_API_KEY` | 可选 | Creem 支付 |
-| Railway | `CREEM_WEBHOOK_SECRET` | 可选 | Creem Webhook 签名 |
-| Railway | `CREEM_PRODUCT_ID_PRO` | 可选 | Creem 产品 ID |
- | Railway | `GEMINI_API_KEY` | 可选 | AI 列检测（已弃用，改用 DeepSeek） |
-| Railway | `DEEPSEEK_API_KEY` | ✅ | DeepSeek AI（智能粘贴 + AI 列检测） |
-| Vercel | `NEXT_PUBLIC_API_URL` | ✅ | Railway 后端域名（如 `https://xxx.up.railway.app`） |
-
----
-
-### 常见部署失败排查
+### 常见问题排查
 
 | 错误 | 原因 | 修复 |
 |------|------|------|
 | `No Next.js version detected` | Vercel 找不到 `landing/package.json` | Dashboard → Root Directory 设成 `landing` |
-| `No module named 'src'` | `product_tool/` 不在容器里 | Railway → Root Directory 清空 |
-| `No module named 'src.output'` | `product_tool/.gitignore` 屏蔽了 `output/` | 把 gitignore 里的 `output/` 改成 `/output/` |
-| `uvicorn: command not found` | 依赖没装 或 `railway.json` 不被识别 | 根目录放 `requirements.txt` + 手动添加 Config File 路径 |
-| `Build skipped` / watchPatterns 不触发 | `watchPatterns` 不包含根文件 | 加上 `"requirements.txt"` 和 `"railway.json"` |
-| `unable to open database file` | `~/.product_tool/` 目录不存在 | 确保 `_init_products_db()` 中 `mkdir(parents=True)` |
-| 图片加载被 CSP 拦截 | `img-src` 没有允许 Railway 域名 | `next.config.mjs` 的 `img-src` 加上 `https://*.up.railway.app` |
-| `connect-src` 限制 API 地址 | 后端换了端口/域名时未更新 CSP | `next.config.mjs` 的 `connect-src` 加上对应地址 |
+| `connect-src` 限制 API 地址 | CSP 没加 API 域名 | `next.config.mjs` 的 `connect-src` 加上 `https://api.quoteflow.it.com` |
+| 防火墙导致连不上 | 服务器端口没开放 | 阿里云/云服务商防火墙开放 8000 端口 |
 
 ---
 
@@ -245,6 +190,7 @@ Pro 用户专属功能，粘贴任意格式产品文本 → AI 自动提取结�
 | 问题 | 修复 |
 |------|------|
 | 未映射列塞进 spec | 移除收集逻辑（同 doc_parser） |
+| 工作簿已关闭崩溃 | `wb.close()` 后设 `wb = None`，fallback 路径重加载 |
 
 ### PDF 解析器 (`pdf_parser.py`)
 
@@ -252,6 +198,11 @@ Pro 用户专属功能，粘贴任意格式产品文本 → AI 自动提取结�
 |------|------|
 | 表头值泄漏到数据行 | 首行不改值，只记录 |
 | 图片位置硬塞 | 型号→文件名匹配不到就留空 |
+| PDF 图片不显示 | `_associate_images_to_products()` 从型号匹配改为页面分组顺序匹配 |
+| quotation.pdf（多产品对比表）解析为空 | 添加 `is_multi_kv` 检测，多列 KV 表正确提取 |
+| quotation2.pdf（嵌套表头单产品表）解析为空 | `detect_table_layout` 扫描所有列；`_extract_col_based` 第一列为空时用左邻列作参数名 |
+| songlink pi.pdf 缺失产品 | `_is_real_model()` 中 `\d+\.\d+` 加 `^` 锚定，防止产品描述中的小数误杀 |
+| 内容策略的假产品得分过高 | `_score_pdf_result` 添加 `_is_valid_pdf_model()` 过滤；`_has_real_products` 阈值 ≥2 → ≥1；单产品加成 |
 
 ### 图片匹配 (`image.py`)
 
@@ -259,6 +210,18 @@ Pro 用户专属功能，粘贴任意格式产品文本 → AI 自动提取结�
 |------|------|
 | Excel 图片扩散到相邻产品 | 移除扩散逻辑 |
 | 兜底时循环分配 | 只在序号范围内分配，不循环 |
+| 两个解析器各做一遍图片提取 | 统一在 `main.py` 选赢家后只做一次 |
+| DOCX 多表图片互相覆盖 | 递增序号替代原始行号 |
+| DOCX 只检测第一列图片 | 改为扫描所有单元格 |
+| 图片缓存被绕过 | `_image_cache` 支持带 `image_col` 参数缓存 |
+
+### 评分系统 (`score.py` / `_score_pdf_result`)
+
+| 问题 | 修复 |
+|------|------|
+| "CONTRACT NO."、"付款方式" 被当作真产品 | 添加字段名黑名单 + 价格合理性检查 `_is_reasonable_price()` |
+| 合同条款行被当作产品 | `universal_parser.py` 添加 `_filter_non_product_rows()` |
+| `universal_parser.py` 无法提前退出 | 添加评分阈值提前终止策略循环 |
 
 ### 报价单生成 (`quotation_excel.py`)
 
