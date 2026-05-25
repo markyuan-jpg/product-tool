@@ -536,27 +536,13 @@ def _has_real_products(df) -> bool:
     """检查 DataFrame 是否包含真实的产品型号（而非参数名/标签）"""
     if df is None or df.empty:
         return False
-    param_keywords = {'motor', 'battery', 'weight', 'speed', 'power', 'voltage',
-                      'current', 'controller', 'charger', '颜色', '规格', '参数',
-                      '尺寸', '重量', '包装', 'description', 'photo', 'picture',
-                      'material', 'dimension', '色', '材', '型号'}
     real_count = 0
     for _, r in df.iterrows():
         m = str(r.get('model', '')).strip()
-        if not m or len(m) < 2:
-            continue
-        if m.endswith(':') or m.endswith('：'):
-            continue
-        # 真型号：至少含一个字母和一个数字
-        has_letter = any(c.isalpha() for c in m)
-        has_digit = any(c.isdigit() for c in m)
-        if has_letter and has_digit:
-            # 排除参数名
-            m_lower = m.lower()
-            is_param = any(kw in m_lower for kw in param_keywords)
-            if not is_param:
-                real_count += 1
-    return real_count >= 2
+        if _is_valid_pdf_model(m):
+            real_count += 1
+    # 允许单个真产品（适用单产品规格表）
+    return real_count >= 1
 
 # --- Docling fallback parser ---
 
@@ -642,15 +628,43 @@ def _parse_pdf_via_docling(pdf_path):
 
 
 
+def _is_valid_pdf_model(m) -> bool:
+    """判断字符串是否是真正产品型号（非参数名/标签）"""
+    if not m:
+        return False
+    m = str(m).strip()
+    if len(m) < 2:
+        return False
+    has_letter = any(c.isalpha() for c in m)
+    has_digit = any(c.isdigit() for c in m)
+    if not (has_letter and has_digit):
+        # 纯数字或纯字母（如"Appearance"）不是产品型号
+        return False
+    # 排除已知参数名（包含即可，如"Model XF-1"含"Model"）
+    param_keywords = {'motor', 'battery', 'weight', 'speed', 'power', 'voltage',
+                      'current', 'controller', 'charger', '颜色', '规格', '参数',
+                      '尺寸', '重量', '包装', 'description', 'photo', 'picture',
+                      'material', 'dimension', '型号'}
+    m_lower = m.lower()
+    for kw in param_keywords:
+        if kw in m_lower:
+            return False
+    # 排除过长文本（大概率是描述不是型号）
+    if len(m) > 40:
+        return False
+    return True
+
+
 def _score_pdf_result(df, source='content') -> float:
     """评分PDF解析结果（与 Excel score_result 公式一致，保留 PDF 特有策略）。"""
     if df is None or df.empty:
         return -1
     n = len(df)
-    has_model = sum(1 for _, r in df.iterrows() if str(r.get('model', '')).strip())
+    # 只计真正产品型号
+    has_model = sum(1 for _, r in df.iterrows() if _is_valid_pdf_model(str(r.get('model', '')).strip()))
     has_price = sum(1 for _, r in df.iterrows() if r.get('price_rmb'))
-    models_set = set(str(r.get('model', '')).strip() for _, r in df.iterrows() if r.get('model'))
-    diversity = len(models_set) / max(has_model, 1)
+    models_set = set(str(r.get('model', '')).strip() for _, r in df.iterrows() if r.get('model') and _is_valid_pdf_model(str(r.get('model', '')).strip()))
+    diversity = len(models_set) / max(has_model, 1) if has_model > 0 else 0
     # 基础公式（与 Excel 一致）
     score = n * 0.3 + has_model * 0.3 + has_price * 0.2 + diversity * 10 * 0.2
     # 产品_ 前缀惩罚（同 Excel）
@@ -659,7 +673,9 @@ def _score_pdf_result(df, source='content') -> float:
         score *= 0.5
     # 布局策略加成（PDF 特有：结构化布局优于自由文本提取）
     source_boost = 1.5 if (source in ('col_based', 'row_based', 'kv_spec') and _has_real_products(df)) else 1.0
-    return score * source_boost
+    # 单产品规格表加成：col_based 找出的唯一真产品应优先于内容策略的噪音
+    single_boost = 1.5 if (n == 1 and has_model == 1 and source in ('col_based', 'row_based', 'kv_spec')) else 1.0
+    return score * source_boost * single_boost
 
 
 def detect_table_layout(table: List[List[str]]) -> str:
@@ -1017,6 +1033,13 @@ def extract_products_from_pdf_v2(pdf_path: str) -> Optional[pd.DataFrame]:
                     key = table[row_idx][0]
                     value = table[row_idx][col_idx]
                     if not key:
+                        # 嵌套表头：第一列为空时，尝试用左邻列作为参数名
+                        if col_idx > 0 and len(table[row_idx]) > col_idx:
+                            alt_key = table[row_idx][col_idx - 1]
+                            if alt_key and str(alt_key).strip():
+                                key = alt_key
+                                value = table[row_idx][col_idx]
+                    if not key:
                         continue
                     key_str = str(key).strip()
                     key_lower = key_str.lower()
@@ -1085,8 +1108,13 @@ def extract_products_from_pdf_v2(pdf_path: str) -> Optional[pd.DataFrame]:
                 # 合并 specs 和 packaging 到 spec_zh
                 all_specs = dict(specs)
                 all_specs.update(packaging)
+                # 清理型号名：去除"Model"、"型号"等前缀（"Model XF-1"→"XF-1"）
+                model_clean = str(model).strip()
+                model_clean = re.sub(r'^(model|型号|产品)\s*[：:\s]', '', model_clean, flags=re.I).strip()
+                if not model_clean:
+                    model_clean = str(model).strip()
                 products.append({
-                    'model': str(model).strip(),
+                    'model': model_clean,
                     'name_zh': '',
                     'price_rmb': price_rmb,
                     'currency': price_currency,
