@@ -72,14 +72,6 @@ def extract_images_from_pdf(pdf_path: str, output_dir: str = None) -> List[Dict]
     if not os.path.exists(pdf_path):
         return []
     
-    # 大文件跳过图片提取（性能保护）
-    try:
-        if os.path.getsize(pdf_path) > 10 * 1024 * 1024:
-            logger.warning(f"Large PDF ({os.path.getsize(pdf_path)//1024//1024}MB), skipping image extraction for speed")
-            return []
-    except OSError:
-        pass
-    
     # Create output directory
     if output_dir is None:
         pdf_name = os.path.splitext(os.path.basename(pdf_path))[0]
