@@ -62,7 +62,8 @@ def extract_images_from_pdf(pdf_path: str, output_dir: str = None) -> List[Dict]
     """从PDF提取图片
     
     Returns:
-        List of dicts: [{'page': int, 'index': int, 'image_path': str}, ...]
+        List of dicts: [{'page': int, 'index': int, 'image_path': str, 'y_center': float}, ...]
+        y_center 是图片在页面中的垂直中心坐标（用于按位置匹配产品行）。
     """
     if not PYMUPDF_AVAILABLE:
         logger.warning("PyMuPDF not installed: pip install pymupdf")
@@ -98,10 +99,20 @@ def extract_images_from_pdf(pdf_path: str, output_dir: str = None) -> List[Dict]
                 with open(img_path, "wb") as f:
                     f.write(image_bytes)
                 
+                # 获取图片在页面上的垂直位置
+                y_center = 0
+                try:
+                    rects = page.get_image_rects(xref)
+                    if rects:
+                        y_center = (rects[0].y0 + rects[0].y1) / 2
+                except Exception:
+                    pass
+                
                 images.append({
                     'page': page_num + 1,
                     'index': img_index,
-                    'image_path': img_path
+                    'image_path': img_path,
+                    'y_center': y_center,
                 })
                 logger.info(f"Extracted: {img_path}")
             except Exception as e:
@@ -132,22 +143,59 @@ def _fill_pdf_merged(table):
     return result
 
 
-def extract_tables_from_pdf(pdf_path: str) -> List[List[List[str]]]:
-    """从PDF提取所有表格"""
+def extract_tables_from_pdf(pdf_path: str, return_positions: bool = False) -> List:
+    """从PDF提取所有表格
+    
+    Args:
+        pdf_path: PDF 文件路径
+        return_positions: 是否返回位置信息（页面号、行Y坐标）
+    
+    Returns:
+        如果 return_positions=False（默认）:
+            List[List[List[str]]] — 旧格式：每个表格是行的列表
+        如果 return_positions=True:
+            List[Dict] — 每个表格含 page, rows, row_bboxes
+            [{'page': int, 'rows': List[List[str]], 'row_bboxes': List[tuple]}, ...]
+    """
+    import pdfplumber.table as _pt
+    
     if not PDFPLUMBER_AVAILABLE:
         raise ImportError("pdfplumber not installed: pip install pdfplumber")
     
     if not os.path.exists(pdf_path):
-        return []
+        return [] if not return_positions else []
     
     all_tables = []
     
     with pdfplumber.open(pdf_path) as pdf:
         for page in pdf.pages:
-            tables = page.extract_tables()
-            for table in tables:
-                if table:
-                    all_tables.append(_fill_pdf_merged(table))
+            # Use find_tables to get bbox info, extract for text
+            raw_tables = page.find_tables()
+            for tbl in raw_tables:
+                rows_text = tbl.extract()
+                if not rows_text or not any(any(c for c in r) for r in rows_text):
+                    continue
+                rows_text = _fill_pdf_merged(rows_text)
+                
+                if return_positions:
+                    # Get each row's bbox
+                    row_bboxes = []
+                    # tbl.rows gives CellGroups; each CellGroup has cells with bboxes
+                    for row_group in tbl.rows:
+                        # Union of all cells in this row gives the row bbox
+                        rx0 = min(c[0] for c in row_group.cells)
+                        ry0 = min(c[1] for c in row_group.cells)
+                        rx1 = max(c[2] for c in row_group.cells)
+                        ry1 = max(c[3] for c in row_group.cells)
+                        row_bboxes.append((rx0, ry0, rx1, ry1))
+                    
+                    all_tables.append({
+                        'page': page.page_number,
+                        'rows': rows_text,
+                        'row_bboxes': row_bboxes,
+                    })
+                else:
+                    all_tables.append(rows_text)
     
     return all_tables
 
@@ -728,14 +776,20 @@ def extract_products_from_pdf_v2(pdf_path: str) -> Optional[pd.DataFrame]:
     if not os.path.exists(pdf_path):
         return None
     
-    tables = extract_tables_from_pdf(pdf_path)
+    # Get tables with position info for image matching
+    tables_data = extract_tables_from_pdf(pdf_path, return_positions=True)
+    if not tables_data:
+        return None
+    
+    # Separate: old format for strategy processing, position info for image matching
+    tables = [td['rows'] for td in tables_data]
+    table_positions = [(td['page'], td['row_bboxes']) for td in tables_data]
+    
     logger.info(f"[DEBUG] Tables found: {len(tables)}")
     for ti, table in enumerate(tables):
         logger.info(f"[DEBUG] Table {ti}: {len(table)} rows x {len(table[0]) if table else 0} cols")
         for ri, row in enumerate(table[:3]):
             logger.info(f"[DEBUG]   Row {ri}: {[str(c)[:25] if c else '' for c in row]}")
-    if not tables:
-        return None
     
     images = extract_images_from_pdf(pdf_path)
     
@@ -1064,15 +1118,17 @@ def extract_products_from_pdf_v2(pdf_path: str) -> Optional[pd.DataFrame]:
                 df_best = best[1]
             
             if not df_best.empty:
+                df_best['_page'] = table_positions[ti][0] if ti < len(table_positions) else 0
                 all_products.append(df_best)
     
     # Fallback: all strategies failed, try content inference from first non-empty table
     if not all_products:
-        for table in tables:
+        for ti, table in enumerate(tables):
             if not table or len(table) < 3:
                 continue
             df_fb = _parse_pdf_by_content(table)
             if df_fb is not None and not df_fb.empty:
+                df_fb['_page'] = table_positions[ti][0] if ti < len(table_positions) else 0
                 all_products.append(df_fb)
                 logger.info(f"[FALLBACK] Content fallback used for {os.path.basename(pdf_path)} ({len(df_fb)} products)")
                 break
@@ -1081,6 +1137,7 @@ def extract_products_from_pdf_v2(pdf_path: str) -> Optional[pd.DataFrame]:
     if not all_products and _USE_DOCLING:
         docling_df = _parse_pdf_via_docling(pdf_path)
         if docling_df is not None and not docling_df.empty:
+            docling_df['_page'] = 0  # Docling has no page info
             all_products.append(docling_df)
             logger.info(f"[DOCLING] Used as fallback for {os.path.basename(pdf_path)} ({len(docling_df)} products)")
 
@@ -1167,24 +1224,46 @@ def extract_products_from_pdf_v2(pdf_path: str) -> Optional[pd.DataFrame]:
 
 
 def _associate_images_to_products(df: pd.DataFrame, images: List[Dict]) -> pd.DataFrame:
-    """关联图片到产品 — 按页面顺序依次分配
+    """关联图片到产品 — 按页面位置匹配。
     
-    PDF 图片文件名(page1_img1.png)不含产品型号，不能用型号匹配。
-    改为按图片在页面中的出现顺序与产品顺序一一对应：
-    第一个产品 ← 第一张图片，第二个产品 ← 第二张图片……
-    对于每页一个产品配一张图的场景效果最好。
+    每个产品带有 _page 标记（源自 table_positions），
+    图片也带有 page 信息。按页面分组后，同一页内的产品和图片
+    按出现顺序一一对应，确保图片不会跨页错配。
+    如果某个页面没有图片，该页产品保持无图。
     """
     df = df.copy()
     df['_image_path'] = ''
     
-    if not images:
+    if not images or df.empty:
         return df
     
-    # 按(页码, 页内序号)排序，保证确定性
-    sorted_images = sorted(images, key=lambda x: (x.get('page', 0), x.get('index', 0)))
+    # 按页面分组
+    has_page_info = '_page' in df.columns
+    if not has_page_info:
+        # 没有页面信息，不分配（避免跨页错误匹配）
+        return df
     
-    # 顺序分配：第 i 个产品 ← 第 i 张图片
-    for i in range(min(len(df), len(sorted_images))):
-        df.loc[df.index[i], '_image_path'] = sorted_images[i]['image_path']
+    # 图片按页面分组
+    images_by_page = {}
+    for img in images:
+        p = img.get('page', 0)
+        images_by_page.setdefault(p, []).append(img)
+    
+    # 对每个页面，按 (page, 页内序号) 排序图片
+    for p in images_by_page:
+        images_by_page[p].sort(key=lambda x: x.get('index', 0))
+    
+    # 产品按页面分组，同一个页面内的产品按出现顺序与图片一一对应
+    page_groups = df.groupby('_page')
+    result_parts = []
+    for page_num, group_df in page_groups:
+        group_df = group_df.copy()
+        page_images = images_by_page.get(page_num, [])
+        if page_images:
+            for i in range(min(len(group_df), len(page_images))):
+                group_df.iloc[i, group_df.columns.get_loc('_image_path')] = page_images[i]['image_path']
+        result_parts.append(group_df)
+    
+    df = pd.concat(result_parts) if result_parts else df
     
     return df
