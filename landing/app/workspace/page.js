@@ -80,13 +80,20 @@ function UploadSection({ onSaveSuccess }) {
     setParsing(true); setParseError(null);
     try {
       const fd = new FormData(); fd.append('file', file);
-      const ac = new AbortController(); const tid = setTimeout(() => ac.abort(), 60000);
+      const ac = new AbortController(); const tid = setTimeout(() => ac.abort(), 120000);
       const res = await fetch(API_BASE + '/api/parse', { method: 'POST', body: fd, signal: ac.signal });
       clearTimeout(tid);
       if (!res.ok) { const e = await res.json().catch(() => ({ detail: t('workspace.upload.parseError', locale) })); throw new Error(e.detail || t('workspace.upload.serverError', locale)); }
       const d = await res.json(); setProducts(d.products || []);
       setParsing(false);
-    } catch (err) { setParseError(err.message); setParsing(false); }
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        setParseError(t('workspace.upload.parseTimeout', locale));
+      } else {
+        setParseError(err.message);
+      }
+      setParsing(false);
+    }
   };
 
   const handleDrop = useCallback((e) => { e.preventDefault(); e.stopPropagation(); setDragOver(false); const f = e.dataTransfer.files[0]; if (f) handleFile(f); }, []);

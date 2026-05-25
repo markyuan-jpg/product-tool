@@ -222,6 +222,7 @@
       "addMoreImages": "+ Add More Images",
       "imageCount": "{n} image(s)",
       "parseError": "Parse failed",
+      "parseTimeout": "Parse timed out. Try a smaller file or try again later.",
       "serverError": "Server error",
       "saveFailed": "Save failed",
       "generateFailed": "Generation failed",

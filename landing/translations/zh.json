@@ -222,6 +222,7 @@
       "addMoreImages": "+ 添加更多图片",
       "imageCount": "{n} 张图片",
       "parseError": "解析失败",
+      "parseTimeout": "解析超时，请尝试较小的文件或稍后重试",
       "serverError": "服务器错误",
       "saveFailed": "保存失败",
       "generateFailed": "生成失败",
