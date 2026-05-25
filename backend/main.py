@@ -178,6 +178,10 @@ CORS_ORIGINS = [
 ]
 if BASE_URL:
     CORS_ORIGINS.append(BASE_URL)
+    # Also allow www. variant (e.g. https://www.quoteflow.it.com)
+    WWW_BASE_URL = BASE_URL.replace("://", "://www.")
+    if WWW_BASE_URL != BASE_URL:
+        CORS_ORIGINS.append(WWW_BASE_URL)
 
 app.add_middleware(
     CORSMiddleware,
