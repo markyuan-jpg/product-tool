@@ -1126,22 +1126,41 @@ async def parse_file(
         cache_key = ''
 
 
-        #  Step 1: Universal parser(仅 Excel
+        #  Step 1 & 2: Universal + Specialized parsers
+
+        df = None
+        df2 = None
+        parse_source = ''
 
         if ext in ('.xlsx', '.xls'):
 
-            df, ptype, count, cache_key = universal_parse(str(save_path))
+            # 并行执行通用解析器和专用解析器
+            from run import parse_file as run_parse_file
+            loop = asyncio.get_event_loop()
 
+            async def _run_both():
+                uni_fut = loop.run_in_executor(None, universal_parse, str(save_path))
+                spec_fut = loop.run_in_executor(None, run_parse_file, str(save_path))
+                uni_result, spec_result = await asyncio.gather(uni_fut, spec_fut)
+                return uni_result, spec_result
+
+            uni_result, spec_result = await _run_both()
+            df, ptype, count, cache_key = uni_result
+            df2 = spec_result
             if count > 0:
-
                 parse_source = f'universal_{ptype}'
 
+        elif ext == '.pdf':
 
-        #  Step 2: Specialized parser(始终运行,择优选择
-
-        df2 = None
-
-        if ext == '.pdf':
+            # Check for scanned PDF (image-based, no extractable text)
+            try:
+                from src.core.pdf_parser import is_likely_scanned_pdf
+                if is_likely_scanned_pdf(str(save_path)):
+                    raise HTTPException(400, "该PDF文件为扫描件，暂不支持。请上传文字型PDF文件（非图片/扫描件）")
+            except HTTPException:
+                raise
+            except Exception:
+                pass  # If detection fails, proceed normally
 
             from pdf_handler import extract_products_from_pdf_v2
 
@@ -1152,12 +1171,6 @@ async def parse_file(
             from src.core.doc_parser import extract_products_from_docx
 
             df2 = extract_products_from_docx(str(save_path))
-
-        else:
-
-            from run import parse_file as run_parse_file
-            loop = asyncio.get_event_loop()
-            df2 = await loop.run_in_executor(None, run_parse_file, str(save_path))
 
 
         #  Step 3: 择优 — 评分系统，质量优先于数量

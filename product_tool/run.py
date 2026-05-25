@@ -139,16 +139,20 @@ Examples:
     return parser.parse_args()
 
 
-def detect_parser_type(file_path: str) -> str:
+def detect_parser_type(file_path: str, wb=None):
     """
-    检测文件类型,返回最适合的解析器
+    检测文件类型,返回最适合的解析器。
+    如果传入了 wb，则复用（read_only 亦可）；否则自行加载（read_only=True）并关闭。
+    返回 (parser_type: str, wb_or_None)
     """
-    from openpyxl import load_workbook
-    
-    try:
-        wb = load_workbook(file_path, data_only=True, read_only=True)
-    except:
-        return 'default'
+    close_wb = False
+    if wb is None:
+        from openpyxl import load_workbook
+        try:
+            wb = load_workbook(file_path, data_only=True, read_only=True)
+            close_wb = True
+        except:
+            return 'default', None
     
     # 检查sheet名和内容
     has_model_marker = False
@@ -198,25 +202,29 @@ def detect_parser_type(file_path: str) -> str:
             else:
                 has_single = False  # 列数>=6 → 多产品表（如合同/报价单）
     
-    wb.close()
+    if close_wb:
+        wb.close()
     
     # 返回最适合的解析器
     if has_table_layout:
-        return 'table'
+        return 'table', None
     if has_model_marker:
-        return 'param_price'
+        return 'param_price', None
     elif has_invoice:
-        return 'invoice'
+        return 'invoice', None
     elif has_price_table:
-        return 'price_table'
+        return 'price_table', None
     elif has_single:
-        return 'single_spec'
+        return 'single_spec', None
     else:
-        return 'default'
+        return 'default', None
 
 
-def parse_file(file_path: str, parser_type: str = None, verbose: bool = False) -> pd.DataFrame:
-    """解析单个文件"""
+def parse_file(file_path: str, parser_type: str = None, verbose: bool = False, wb=None) -> pd.DataFrame:
+    """解析单个文件
+    Args:
+        wb: 预加载的 openpyxl Workbook（Excel 解析时复用）
+    """
     ext = os.path.splitext(file_path)[1].lower()
     
     # PDF 解析
@@ -235,7 +243,7 @@ def parse_file(file_path: str, parser_type: str = None, verbose: bool = False) -
     
     # Excel 解析
     if parser_type is None:
-        parser_type = detect_parser_type(file_path)
+        parser_type, _ = detect_parser_type(file_path, wb=wb)
     
     if parser_type == 'param_price':
         df = parse_param_price(file_path)
@@ -249,13 +257,13 @@ def parse_file(file_path: str, parser_type: str = None, verbose: bool = False) -
             _real_model = lambda m: bool(re.search(r'[A-Za-z]', m) and re.search(r'\d', m))
             real_models = sum(1 for m in df['model'].astype(str).str.strip() if _real_model(m))
             if real_models < 2:
-                df = parse_excel_v3(file_path)
+                df = parse_excel_v3(file_path, wb=wb)
     elif parser_type == 'single_spec':
         df = parse_single_spec(file_path)
     elif parser_type == 'table':
         df = parse_table(file_path)
     else:
-        df = parse_excel_v3(file_path)
+        df = parse_excel_v3(file_path, wb=wb)
     
     # 格式化spec - 保留原始格式
     if df is not None and len(df) > 0 and 'spec_zh' in df.columns:

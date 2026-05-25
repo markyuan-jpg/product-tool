@@ -19,6 +19,18 @@ from PIL import Image as PILImage
 
 TEMP_IMAGE_FOLDER = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'temp_images')
 
+# ─── 图片提取缓存 ───
+
+_image_cache = {}
+
+def _cache_key(file_path: str) -> str:
+    """生成缓存 key：文件路径 + 修改时间戳"""
+    try:
+        mtime = os.path.getmtime(file_path)
+        return f"{file_path}@{mtime}"
+    except OSError:
+        return file_path
+
 # ─── 图片压缩（生成时使用，避免原始分辨率嵌入） ───
 
 MAX_IMAGE_WIDTH = 1200
@@ -399,7 +411,15 @@ def extract_embedded_images(file_path: str, image_col: Optional[int] = None) -> 
     1. openpyxl _images (标准嵌入, 有 anchor)
     2. DISPIMG (WPS 公式, 覆盖第1路缺失的)
     3. drawing XML (标准 drawing, 覆盖前两路都缺失的)
+    
+    带文件级缓存：相同文件 + 修改时间 → 跳过重复提取。
     """
+    global _image_cache
+    ck = _cache_key(file_path)
+    cache_entry = _image_cache.get(ck)
+    if cache_entry is not None and image_col is None:
+        return cache_entry
+
     result = {}
 
     try:
@@ -426,6 +446,8 @@ def extract_embedded_images(file_path: str, image_col: Optional[int] = None) -> 
     except Exception:
         pass
 
+    if image_col is None:
+        _image_cache[ck] = result
     return result
 
 
@@ -490,8 +512,9 @@ def match_sku_folder(sku: str, image_dirs: List[str]) -> Optional[str]:
 
 def extract_images_from_docx(file_path: str) -> Dict[int, str]:
     """
-    从 DOCX 提取图片, 解析 XML 确定每个图片所在的表格行。
-    返回 {product_row_index: file_path}，跳过没有图片的行。
+    从 DOCX 提取图片，按表格顺序分配递增序号。
+    检测所有列（不限于第一列）的图片，跳过表头行。
+    返回 {sequential_index: file_path}，与 DataFrame 的 _row 对齐。
     """
     import zipfile as zf_local
     images = {}
@@ -499,7 +522,6 @@ def extract_images_from_docx(file_path: str) -> Dict[int, str]:
         return images
     try:
         with zf_local.ZipFile(file_path, 'r') as z:
-            # 1. 解析 document.xml 找出有图片的表格行
             import xml.etree.ElementTree as ET
             namespaces = {
                 'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
@@ -540,31 +562,35 @@ def extract_images_from_docx(file_path: str) -> Dict[int, str]:
             if not tables:
                 return images
             
-            # 遍历所有表格，找到第一个表格的图片列
+            # 遍历所有表格，检测所有列的图片
             img_rows_with_positions = []  # (table_idx, row_idx, rid)
             for ti, tbl in enumerate(tables):
                 rows = tbl.findall('.//w:tr', namespaces)
                 for ri, row in enumerate(rows):
                     cells = row.findall('.//w:tc', namespaces)
-                    # 检查第一个单元格（Photo列）是否有图片
-                    if cells:
-                        drawings = cells[0].findall('.//w:drawing', namespaces)
+                    # 检查所有列（不限于第一列），取第一个有图的单元格
+                    found = False
+                    for cell in cells:
+                        if found:
+                            break
+                        drawings = cell.findall('.//w:drawing', namespaces)
                         if not drawings:
-                            drawings = cells[0].findall('.//wp:inline', namespaces)
+                            drawings = cell.findall('.//wp:inline', namespaces)
                         if drawings:
-                            # 找到图片引用
-                            blip = drawings[0].findall('.//a:blip', namespaces)
-                            if blip:
-                                embed = blip[0].get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed')
-                                if embed and embed in rels:
-                                    media_fname = rels[embed]
-                                    if media_fname in media_files:
-                                        img_rows_with_positions.append((ti, ri, media_files[media_fname]))
+                            for dwg in drawings:
+                                blip = dwg.findall('.//a:blip', namespaces)
+                                if blip:
+                                    embed = blip[0].get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed')
+                                    if embed and embed in rels:
+                                        media_fname = rels[embed]
+                                        if media_fname in media_files:
+                                            img_rows_with_positions.append((ti, ri, media_files[media_fname]))
+                                            found = True
+                                            break
             
             os.makedirs(TEMP_IMAGE_FOLDER, exist_ok=True)
             
-            # 按 (table_idx, row_idx) 提取图片，跳过表头行 (ri=0)
-            # 用表格行号 ri 作为 key（与 DataFrame 的 _row 对应）
+            # 按 (table_idx, row_idx) 去重，跳过表头行 (ri=0)
             img_row_map = {}
             for ti, ri, mf_path in img_rows_with_positions:
                 if ri == 0:
@@ -573,11 +599,15 @@ def extract_images_from_docx(file_path: str) -> Dict[int, str]:
                 if key not in img_row_map:
                     img_row_map[key] = mf_path
             
+            # 分配递增序号，避免多表时行号覆盖
+            images = {}
+            seq = 1
             for (ti, ri), mf_path in sorted(img_row_map.items()):
                 img_data = z.read(mf_path)
                 ext = os.path.splitext(mf_path)[1] or '.png'
                 img_path = _save_image_unique(img_data, ext)
-                images[ri] = img_path  # key=行号，与 _row 对应
+                images[seq] = img_path
+                seq += 1
                 
     except Exception as e:
         logging.warning(f"DOCX image extraction (XML) failed: {e}")

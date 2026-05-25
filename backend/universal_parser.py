@@ -707,7 +707,7 @@ def match_images_to_products(df: pd.DataFrame, file_path: str) -> pd.DataFrame:
 # ─── 入口 ───
 
 def _parse_sheet(ws) -> pd.DataFrame:
-    """对单个 sheet 执行 4 层策略解析。"""
+    """对单个 sheet 执行 4 层策略解析（带提前终止）。"""
     # 跳过生成的文件
     first_text = str(ws.cell(1, 1).value or '').lower()
     if 'foreign trade quotation' in first_text or 'proforma invoice' in first_text:
@@ -722,27 +722,37 @@ def _parse_sheet(ws) -> pd.DataFrame:
         if df_kv.empty:
             df_kv = extract_kv_product(ws, header_row)
         if not df_kv.empty:
-            candidates.append((df_kv, 'kv'))
+            score = score_result(df_kv)
+            candidates.append((df_kv, 'kv', score))
+            if score >= 5 or (len(df_kv) >= 5 and score >= 3):
+                return max(candidates, key=lambda c: c[2])[0]
 
     # 策略2: 表格布局（关键词映射）
     col_map = map_columns(ws, header_row)
     if col_map:
         df_tbl = parse_with_colmap(ws, header_row, col_map)
         if not df_tbl.empty:
-            candidates.append((df_tbl, 'table'))
+            score = score_result(df_tbl)
+            candidates.append((df_tbl, 'table', score))
+            if score >= 5 or (len(df_tbl) >= 5 and score >= 3):
+                return max(candidates, key=lambda c: c[2])[0]
 
     # 策略3: 内容驱动
     df_content = parse_by_content(ws, header_row)
     if not df_content.empty:
-        candidates.append((df_content, 'content'))
+        score = score_result(df_content)
+        candidates.append((df_content, 'content', score))
+        if score >= 5 or (len(df_content) >= 5 and score >= 3):
+            return max(candidates, key=lambda c: c[2])[0]
 
     # 策略4: 无表头模式
     if header_row <= 1:
         df_no_header = parse_by_content(ws, 0)
         if not df_no_header.empty:
-            candidates.append((df_no_header, 'content'))
+            score = score_result(df_no_header)
+            candidates.append((df_no_header, 'content', score))
 
-    candidates = [(df, t) for df, t in candidates if isinstance(df, pd.DataFrame) and not df.empty]
+    candidates = [(df, t) for df, t, _ in candidates if isinstance(df, pd.DataFrame) and not df.empty]
     if candidates:
         return max(candidates, key=lambda c: score_result(c[0]))[0]
     return pd.DataFrame()

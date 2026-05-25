@@ -822,41 +822,27 @@ except ImportError:
 
 # ==================== 第六部分: 主入口 ====================
 
-def parse_excel_v3(file_path: str) -> Optional[pd.DataFrame]:
+def parse_excel_v3(file_path: str, wb=None) -> Optional[pd.DataFrame]:
     if not os.path.exists(file_path):
         return None
     
     base_name = os.path.splitext(os.path.basename(file_path))[0]
     output_dir = os.path.dirname(file_path)
     
-    # Extract images first
-    images_by_row = {}
-    if HAS_NEW_PARSERS:
-        try:
-            from openpyxl import load_workbook
-            wb = load_workbook(file_path, data_only=True, read_only=False)
-            ws = wb.active
-            
-            # Pass file_path to extraction
-            images_by_row = extract_images_from_worksheet(ws, output_dir, base_name, file_path)
-            wb.close()
-        except Exception as e:
-            print(f'Image extraction error: {e}')
-    
     # 尝试使用新解析器
     if HAS_NEW_PARSERS:
+        _close_wb_classify = False
         try:
-            # 检测文件类型并使用对应解析器
-            from openpyxl import load_workbook
-            
-            wb = load_workbook(file_path, data_only=True, read_only=True)
+            if wb is None:
+                from openpyxl import load_workbook
+                wb = load_workbook(file_path, data_only=True, read_only=True)
+                _close_wb_classify = True
             ws = wb.active
             
             layout = classify_format(ws)
             _product_codes = 0
             if layout == 'single_spec':
                 import re as _re
-                # 扫描 A~D 列（1~4），查找短字母+数字组合的产品代码
                 for _c in range(1, 5):
                     for _r in range(2, min(ws.max_row + 1, 40)):
                         _v = str(ws.cell(_r, _c).value or '').strip()
@@ -866,7 +852,8 @@ def parse_excel_v3(file_path: str) -> Optional[pd.DataFrame]:
                                 break
                     if _product_codes >= 3:
                         break
-            wb.close()
+            if _close_wb_classify:
+                wb.close()
             
             # 使用新的专用解析器
             if layout == 'param_list':
@@ -904,7 +891,6 @@ def parse_excel_v3(file_path: str) -> Optional[pd.DataFrame]:
                     return df
             
             elif layout == 'single_spec':
-                # 已在 wb.close() 之前计算 _product_codes，直接使用
                 if _product_codes >= 3:
                     df = None  # 回退到 fallback 解析
                 else:
@@ -920,11 +906,26 @@ def parse_excel_v3(file_path: str) -> Optional[pd.DataFrame]:
         except Exception as e:
             print(f"New parser error, falling back: {e}")
     
-    # Fallback: 使用原有解析器
+    # Fallback: 使用原有解析器（复用 wb 参数或重新加载）
+    _close_wb_fallback = False
+    if wb is None:
+        try:
+            from openpyxl import load_workbook
+            wb = load_workbook(file_path, data_only=True, read_only=True)
+            _close_wb_fallback = True
+        except Exception:
+            return None
+    
+    # Extract images only for fallback path (需 read_only=False)
+    images_by_row = {}
     try:
-        wb = load_workbook(file_path, data_only=True, read_only=True)
-    except Exception:
-        return None
+        from openpyxl import load_workbook
+        wb_img = load_workbook(file_path, data_only=True, read_only=False)
+        ws_img = wb_img.active
+        images_by_row = extract_images_from_worksheet(ws_img, output_dir, base_name, file_path)
+        wb_img.close()
+    except Exception as e:
+        print(f'Image extraction error: {e}')
     
     all_dfs = []
     for sheet in wb:
@@ -950,7 +951,8 @@ def parse_excel_v3(file_path: str) -> Optional[pd.DataFrame]:
             df['_sheet'] = ws.title
             all_dfs.append(df)
     
-    wb.close()
+    if _close_wb_fallback:
+        wb.close()
     
     if not all_dfs:
         return pd.DataFrame()
@@ -958,14 +960,18 @@ def parse_excel_v3(file_path: str) -> Optional[pd.DataFrame]:
     return pd.concat(all_dfs, ignore_index=True)
 
 
-def parse_excel(file_path: str) -> Optional[pd.DataFrame]:
-    df = parse_excel_v3(file_path)
+def parse_excel(file_path: str, wb=None) -> Optional[pd.DataFrame]:
+    df = parse_excel_v3(file_path, wb=wb)
     if df is None or df.empty:
         return df
 
     df['_source_file'] = os.path.basename(file_path)
 
-    if '_row' in df.columns:
+    # Skip image matching if already populated by parse_excel_v3
+    has_images = ('_image_path' in df.columns and
+                  df['_image_path'].notna().any() and
+                  (df['_image_path'].astype(str).str.len() > 0).any())
+    if '_row' in df.columns and not has_images:
         try:
             from src.core.image import match_images_to_products
             df = match_images_to_products(df, file_path)

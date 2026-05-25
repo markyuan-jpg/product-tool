@@ -43,6 +43,21 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
+def is_likely_scanned_pdf(pdf_path: str) -> bool:
+    """快速检测PDF是否为扫描件（图片型，无可提取文字）。
+    
+    提取所有页面的文字，如果总字符数 < 50 则判定为扫描件。
+    """
+    if not PDFPLUMBER_AVAILABLE or not os.path.exists(pdf_path):
+        return False
+    try:
+        with pdfplumber.open(pdf_path) as pdf:
+            total_text = sum(len(page.extract_text() or '') for page in pdf.pages)
+        return total_text < 50
+    except Exception:
+        return False
+
+
 def extract_images_from_pdf(pdf_path: str, output_dir: str = None) -> List[Dict]:
     """从PDF提取图片
     
@@ -1152,27 +1167,24 @@ def extract_products_from_pdf_v2(pdf_path: str) -> Optional[pd.DataFrame]:
 
 
 def _associate_images_to_products(df: pd.DataFrame, images: List[Dict]) -> pd.DataFrame:
-    """智能关联图片到产品（每个产品只配自己文件的第一张图）"""
+    """关联图片到产品 — 按页面顺序依次分配
+    
+    PDF 图片文件名(page1_img1.png)不含产品型号，不能用型号匹配。
+    改为按图片在页面中的出现顺序与产品顺序一一对应：
+    第一个产品 ← 第一张图片，第二个产品 ← 第二张图片……
+    对于每页一个产品配一张图的场景效果最好。
+    """
     df = df.copy()
     df['_image_path'] = ''
     
     if not images:
         return df
     
-    products = df['model'].tolist()
+    # 按(页码, 页内序号)排序，保证确定性
+    sorted_images = sorted(images, key=lambda x: (x.get('page', 0), x.get('index', 0)))
     
-    for i, product_model in enumerate(products):
-        product_model_str = str(product_model).lower().strip()
-        matched = False
-        for img in images:
-            img_path = img.get('image_path', '')
-            img_name = os.path.basename(img_path).lower()
-            if product_model_str in img_name:
-                df.loc[df.index[i], '_image_path'] = img_path
-                matched = True
-                break
-        # 没匹配到就不分配，避免张冠李戴
-        if not matched:
-            pass
+    # 顺序分配：第 i 个产品 ← 第 i 张图片
+    for i in range(min(len(df), len(sorted_images))):
+        df.loc[df.index[i], '_image_path'] = sorted_images[i]['image_path']
     
     return df
