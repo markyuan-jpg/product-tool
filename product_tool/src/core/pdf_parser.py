@@ -678,8 +678,8 @@ def detect_table_layout(table: List[List[str]]) -> str:
     model_keywords = ['model', '型号', '产品', 'item', 'sku', 'product', '产品名称', '编号']
     
     for idx, row in enumerate(table):
-        # 逐格检查前3列：表头文本通常较短（<40字符），避免spec中的"models:"误匹配
-        for c in row[:3]:
+        # 逐格检查所有列（仅限短文本<40字符，避免spec误匹配）
+        for c in row:
             cv = str(c or '').strip()
             if len(cv) > 40:
                 continue  # 长文本不太可能是表头
@@ -704,8 +704,8 @@ def detect_table_layout(table: List[List[str]]) -> str:
         if val is not None and val != '':
             first_col.append(val)
     
-    # 同样逐格检查并限制长度
-    first_row_short = [str(c or '').strip()[:40] for c in header_row[:3]]
+    # 同样逐格检查并限制长度（扫描所有列）
+    first_row_short = [str(c or '').strip()[:40] for c in header_row]
     first_row_str = ' '.join(first_row_short).lower()
     first_col_str = ' '.join(str(c or '') for c in first_col[:5]).lower()
     
@@ -1270,7 +1270,7 @@ def extract_products_from_pdf_v2(pdf_path: str) -> Optional[pd.DataFrame]:
             if not (any(c.isalpha() for c in m) and any(c.isdigit() for c in m)):
                 return False
             # 过滤规格表达式(mmxmm, usd结尾等)
-            spec_patterns = [r'\d+\s*mm', r'mm\*mm', r'usd$', r'\d+usd', r'\d+\.\d+']
+            spec_patterns = [r'\d+\s*mm', r'mm\*mm', r'usd$', r'\d+usd', r'^\d+\.\d+']
             for pat in spec_patterns:
                 if re.search(pat, m, re.I):
                     return False
