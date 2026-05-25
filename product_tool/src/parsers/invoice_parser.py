@@ -189,13 +189,7 @@ def parse_invoice(file_path: str) -> pd.DataFrame:
         return pd.DataFrame()
     
     df = pd.concat(all_dfs, ignore_index=True)
-    try:
-        from src.core.image import match_images_to_products
-        df = match_images_to_products(df, file_path)
-    except Exception:
-        pass
-    if '_image_path' not in df.columns:
-        df['_image_path'] = ''
+    
     return df
 
 

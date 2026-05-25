@@ -1202,27 +1202,24 @@ async def parse_file(
                     df = df2
                     parse_source = 'specialized'
 
-        # 后处理:如果 df2 有图片但 df 没有,则尝试转移
-        if df2 is not None and len(df2) > 0 and '_image_path' in df2.columns:
-            has_images = df2['_image_path'].notna().any() or (df2['_image_path'].astype(str).str.len() > 0).any()
-            if has_images and ('_image_path' not in df.columns or not df['_image_path'].notna().any()):
-                if '_image_path' not in df.columns:
-                    df['_image_path'] = ''
-                # 按 _row + _sheet 匹配转移图片路径
-                img_lookup = {}
-                for _, row in df2.iterrows():
-                    key = (row.get('_row'), row.get('_sheet'))
-                    img_path = row.get('_image_path', '')
-                    if img_path and key not in img_lookup:
-                        img_lookup[key] = img_path
-                for idx, row in df.iterrows():
-                    key = (row.get('_row'), row.get('_sheet'))
-                    if key in img_lookup:
-                        df.at[idx, '_image_path'] = img_lookup[key]
-
         if df is None or len(df) == 0:
 
             raise HTTPException(400, "文件中未找到产品数据")
+
+        # 统一图片匹配：选赢家后只做一次
+        if ext in ('.xlsx', '.xls') and '_row' in df.columns:
+            try:
+                from src.core.image import match_images_to_products as _match_img
+                df = _match_img(df, str(save_path))
+            except Exception:
+                pass
+        elif ext == '.docx' and '_row' in df.columns:
+            try:
+                from src.core.image import match_images_to_products_docx as _match_docx
+                df = _match_docx(df, str(save_path))
+            except Exception:
+                pass
+        # PDF 图片匹配已在 pdf_parser.py 内部完成
 
 
         # 后处理:PDF model 空值向前填充(共享上一行型号)

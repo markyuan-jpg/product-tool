@@ -494,13 +494,7 @@ def extract_products_from_docx(file_path: str) -> 'pd.DataFrame':
     df = pd.DataFrame(data)
     df = df[df['model'].notna() & (df['model'] != '')]
     
-    # 图片匹配: DOCX 按顺序分配
-    try:
-        from .image import match_images_to_products_docx
-        df = match_images_to_products_docx(df, file_path)
-    except Exception:
-        pass
-    
+    # 图片匹配改为统一在 main.py 做（DOCX 图片 + Excel 图片统一处理）
     return df
 
 

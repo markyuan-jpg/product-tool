@@ -968,17 +968,7 @@ def parse_excel(file_path: str, wb=None) -> Optional[pd.DataFrame]:
 
     df['_source_file'] = os.path.basename(file_path)
 
-    # Skip image matching if already populated by parse_excel_v3
-    has_images = ('_image_path' in df.columns and
-                  df['_image_path'].notna().any() and
-                  (df['_image_path'].astype(str).str.len() > 0).any())
-    if '_row' in df.columns and not has_images:
-        try:
-            from src.core.image import match_images_to_products
-            df = match_images_to_products(df, file_path)
-        except Exception as e:
-            import logging
-            logging.warning(f"Image matching failed: {e}")
+    # 图片匹配改为统一在 main.py 选赢家后做一次
 
     if 'image_path' not in df.columns:
         df['image_path'] = ''

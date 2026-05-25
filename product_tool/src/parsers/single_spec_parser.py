@@ -280,13 +280,6 @@ def parse_single_spec(file_path: str, industry: str = None) -> pd.DataFrame:
     wb.close()
     
     df = pd.DataFrame(result)
-    try:
-        from src.core.image import match_images_to_products
-        df = match_images_to_products(df, file_path)
-    except Exception:
-        pass
-    if '_image_path' not in df.columns:
-        df['_image_path'] = ''
     return df
 
 

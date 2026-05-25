@@ -115,14 +115,6 @@ def parse_price_table(file_path: str) -> pd.DataFrame:
     
     df = pd.DataFrame(result)
     
-    try:
-        from src.core.image import match_images_to_products
-        df = match_images_to_products(df, file_path)
-    except Exception:
-        pass
-    if '_image_path' not in df.columns:
-        df['_image_path'] = ''
-    
     # 过滤超长model
     df = df[df['model'].str.len() < 30]
     

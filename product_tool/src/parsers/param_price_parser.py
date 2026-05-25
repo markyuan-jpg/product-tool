@@ -166,9 +166,6 @@ def parse_param_price(file_path: str, industry: str = None) -> pd.DataFrame:
     df = pd.DataFrame(result)
     df = df[df['model'].str.len() < 30]
     
-    # 提取并关联图片
-    df = match_images_to_products(df, file_path)
-    
     return df
 
 
@@ -251,8 +248,6 @@ def parse_table(file_path: str) -> pd.DataFrame:
         return pd.DataFrame()
     
     df = pd.DataFrame(result)
-    
-    df = match_images_to_products(df, file_path)
     
     return df
 

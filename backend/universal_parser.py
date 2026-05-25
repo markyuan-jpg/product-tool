@@ -745,16 +745,6 @@ def score_result(df) -> float:
     return score
 
 
-# ─── 图片匹配 ───
-
-def match_images_to_products(df: pd.DataFrame, file_path: str) -> pd.DataFrame:
-    """按行号匹配图片到产品。"""
-    try:
-        from src.core.image import match_images_to_products as unified_match
-        return unified_match(df, file_path)
-    except Exception:
-        return df
-
 # ─── 入口 ───
 
 def _parse_sheet(ws) -> pd.DataFrame:
@@ -857,8 +847,5 @@ def parse(file_path: str):
         best_df = pd.concat(all_results, ignore_index=True)
 
     best_type = 'multi' if len(all_results) > 1 else 'table'
-
-    # 图片匹配
-    best_df = match_images_to_products(best_df, file_path)
 
     return best_df, best_type, len(best_df), ''

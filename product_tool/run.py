@@ -269,16 +269,6 @@ def parse_file(file_path: str, parser_type: str = None, verbose: bool = False, w
     if df is not None and len(df) > 0 and 'spec_zh' in df.columns:
         df['spec_zh'] = df['spec_zh'].fillna('')
     
-    # Excel 嵌入式图片匹配（某些专用解析器可能没做）
-    if df is not None and len(df) > 0 and ext in ('.xlsx', '.xls'):
-        has_images = '_image_path' in df.columns and df['_image_path'].notna().any()
-        if not has_images:
-            try:
-                from src.core.image import match_images_to_products
-                df = match_images_to_products(df, file_path)
-            except Exception:
-                pass
-    
     return df
 
 
