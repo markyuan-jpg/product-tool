@@ -145,7 +145,10 @@ export default function HowItWorksPage() {
         {/* Smart Paste */}
         <div className="mb-14 border border-[var(--border)] rounded-xl p-6 bg-[var(--surface)] text-center">
           <div className="text-3xl mb-2">📋</div>
-          <h3 className="text-base font-bold text-[var(--navy)] mb-2">{t('howItWorks.smartPaste.title', locale)}</h3>
+          <h3 className="text-base font-bold text-[var(--navy)] mb-2">
+            {t('howItWorks.smartPaste.title', locale)}
+            <span className="ml-2 px-2 py-0.5 text-[10px] font-medium bg-red-100 text-red-600 rounded-full">{t('howItWorks.smartPaste.proNote', locale)}</span>
+          </h3>
           <p className="text-sm text-[var(--text-secondary)]">{t('howItWorks.smartPaste.subtitle', locale)}</p>
           <p className="text-xs text-[var(--text-secondary)] mt-2">{t('howItWorks.smartPaste.desc', locale)}</p>
         </div>

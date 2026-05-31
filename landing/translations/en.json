@@ -69,7 +69,7 @@
         "items": [
           "Drag or click to select supplier files — supports Excel, PDF, Word",
           "No manual data sorting needed — system auto-detects file type",
-          "Upload multiple files at once, merged into one product library",
+          "Single file upload — upload files one by one and view results together",
           "Files are encrypted and deleted after parsing — no long-term storage"
         ]
       },
@@ -104,7 +104,6 @@
         { "label": "Data Extraction", "desc": "3-strategy scoring" },
         { "label": "Image Matching", "desc": "3-way engine" },
         { "label": "Dedup & Merge", "desc": "7-step fuzzy merge" },
-        { "label": "Categorize", "desc": "Auto classification" },
         { "label": "Save to Library", "desc": "Product database" },
         { "label": "Generate Docs", "desc": "5 document types" }
       ]
@@ -155,11 +154,11 @@
       },
       {
         "name": "Pro",
-        "price": "£39",
+        "price": "$9.99",
         "period": "/mo",
-        "desc": "Early bird price · Limited spots, regular £69/mo",
-        "action": "Contact to Subscribe",
-        "highlight": "Early Bird",
+        "desc": "Full access to all features, unlimited usage",
+        "action": "Subscribe",
+        "highlight": null,
         "features": ["Parse Excel / PDF / Word files", "Generate Excel quotations", "Generate PDF quotations", "Auto image matching", "Product library management", "Quotation history", "FOB / CIF / DDP trade terms", "Bilingual translation (CN/EN)", "Proforma Invoice (PI)", "Packing List + Commercial Invoice", "Unlimited products", "Company info configuration", "Real-time exchange rates", "Template-adaptive quotes"]
       },
       {

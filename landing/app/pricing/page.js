@@ -30,8 +30,8 @@ export default function PricingPage() {
 
   const tiers = [0, 1, 2].map(i => ({
     name: t(`pricing.tiers.${i}.name`, locale),
-    price: ['\u00a50', '\u00a539', '\u2014'][i],
-    period: t(`pricing.tiers.1.period`, locale),
+    price: i === 1 ? t('pricing.tiers.1.price', locale) : ['\u00a50', '\u00a539', '\u2014'][i],
+    period: i === 1 ? t('pricing.tiers.1.period', locale) : '',
     desc: t(`pricing.tiers.${i}.desc`, locale),
     action: t(`pricing.tiers.${i}.action`, locale),
     href: i === 0 ? '/' : i === 1 ? 'mailto:yb857151464@wechat.com' : '#',
@@ -40,9 +40,10 @@ export default function PricingPage() {
     features: [0,1,2,3,4,5,6,7,8,9,10,11,12,13].map(j => t(`pricing.tiers.${i}.features.${j}`, locale)).filter(x => !x.startsWith('pricing.')),
   }));
 
+  const FREE_FEATURE_ROWS = new Set([0, 1, 2, 3, 4, 5, 6, 7, 11, 12, 13]);
   const features = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14].map(i => ({
     name: t(`pricing.featureTable.rows.${i}.0`, locale),
-    free: i < 2 || i === 4 || i === 7,
+    free: FREE_FEATURE_ROWS.has(i),
     pro: true,
     flex: i < 5 || i === 3 || i === 10 || i === 11,
   }));

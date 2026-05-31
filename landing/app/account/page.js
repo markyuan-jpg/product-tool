@@ -70,12 +70,17 @@ export default function AccountPage() {
       } catch(e) {}
     });
     try {
-      const stored = JSON.parse(localStorage.getItem('bank_info') || '{}');
-      if (stored.beneficiary) setBankBeneficiary(stored.beneficiary);
-      if (stored.bank_name) setBankName(stored.bank_name);
-      if (stored.bank_address) setBankAddress(stored.bank_address);
-      if (stored.account_no) setBankAccount(stored.account_no);
-      if (stored.swift_code) setBankSwift(stored.swift_code);
+      const res = await fetch(`${API_BASE}/api/bank/load`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+      });
+      if (res.ok) {
+        const stored = await res.json();
+        if (stored.beneficiary) setBankBeneficiary(stored.beneficiary);
+        if (stored.bank_name) setBankName(stored.bank_name);
+        if (stored.bank_address) setBankAddress(stored.bank_address);
+        if (stored.account_no) setBankAccount(stored.account_no);
+        if (stored.swift_code) setBankSwift(stored.swift_code);
+      }
     } catch (e) {}
   }, [router]);
 
@@ -94,7 +99,7 @@ export default function AccountPage() {
       body.append('old_password', oldPw);
       body.append('new_password', newPw);
       const res = await fetch(`${API_BASE}/api/auth/change-password`, {
-        method: 'POST',
+        method: 'PUT',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -207,14 +212,24 @@ export default function AccountPage() {
                 <input type="text" value={bankSwift} onChange={e => setBankSwift(e.target.value)}
                   placeholder={t('account.bankSwift', locale)} className="w-full px-3 py-2 text-sm border border-[var(--border)] rounded-lg focus:outline-none focus:border-[var(--navy)]" />
                 {bankMsg && <p className="text-xs text-[var(--success)] mt-1">{bankMsg}</p>}
-                <button onClick={() => {
-                  localStorage.setItem('bank_info', JSON.stringify({
-                    beneficiary: bankBeneficiary, bank_name: bankName,
-                    bank_address: bankAddress, account_no: bankAccount,
-                    swift_code: bankSwift,
-                  }));
-                  setBankMsg(t('account.bankSaved', locale));
-                  setTimeout(() => setBankMsg(''), 3000);
+                <button onClick={async () => {
+                  setBankMsg('');
+                  try {
+                    const b = new URLSearchParams();
+                    b.append('beneficiary', bankBeneficiary);
+                    b.append('bank_name', bankName);
+                    b.append('bank_address', bankAddress);
+                    b.append('account_no', bankAccount);
+                    b.append('swift_code', bankSwift);
+                    const res = await fetch(`${API_BASE}/api/bank/save`, {
+                      method: 'POST', body: b,
+                      headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}`, 'Content-Type': 'application/x-www-form-urlencoded' }
+                    });
+                    if (res.ok) {
+                      setBankMsg(t('account.bankSaved', locale));
+                      setTimeout(() => setBankMsg(''), 3000);
+                    }
+                  } catch (e) {}
                 }} className="mt-2 w-full py-2 rounded-lg border border-[var(--gold)] text-[var(--navy)] text-sm font-medium hover:bg-[var(--gold)] transition-colors cursor-pointer">
                   {t('account.bankSaveLocal', locale)}
                 </button>

@@ -120,44 +120,37 @@ class QuotationExcel:
     
 
     def __init__(
-
         self,
-
         supplier: str = '',
-
         quotation_no: str = '',
-
         valid_days: int = 30,
-
         trade_terms: str = 'FOB Qingdao',
-
         payment_terms: str = '30% deposit by T/T, 70% balance before shipment within 60 days upon receipt of payment.',
-
         currency: str = 'CNY',
-
         lang: str = 'chinese',
-
         company_info: dict = None,
-
+        **kwargs,
     ):
-
         self.supplier = supplier
-
         self.company_info = company_info or {}
-
         self.quotation_no = quotation_no or f"Q-{datetime.now().strftime('%Y%m%d')}"
-
         self.valid_days = valid_days
-
         self.trade_terms = trade_terms
-
         self.payment_terms = payment_terms
-
         self.date = datetime.now().strftime('%Y-%m-%d')
-
         self.currency = currency.upper()
-
         self.lang = lang
+        # Extra fields from export panel
+        self.contract_no = kwargs.get('contract_no', '')
+        self.po_no = kwargs.get('po_no', '')
+        self.lc_no = kwargs.get('lc_no', '')
+        self.hs_code = kwargs.get('hs_code', '')
+        self.shipping_marks = kwargs.get('shipping_marks', '')
+        self.freight = kwargs.get('freight', '')
+        self.insurance = kwargs.get('insurance', '')
+        self.handling = kwargs.get('handling', '')
+        self.delivery_time = kwargs.get('delivery_time', '')
+        self._validity_days = kwargs.get('validity_days', '')
 
     
 
@@ -480,7 +473,9 @@ class QuotationExcel:
 
         
 
-        valid_until = (datetime.now() + timedelta(days=self.valid_days)).strftime('%Y-%m-%d')
+        # Use user-supplied validity_days if provided
+        effective_validity = int(self._validity_days) if self._validity_days and str(self._validity_days).isdigit() else self.valid_days
+        valid_until = (datetime.now() + timedelta(days=effective_validity)).strftime('%Y-%m-%d')
 
         
 
@@ -979,18 +974,26 @@ class QuotationExcel:
             
 
         terms = [
-
             f"{self._translate_doc('Trade Terms')}: {enhanced_terms}",
-
             f"{self._translate_doc('Payment Terms')}: {payment_by_lang(self.payment_terms, self.lang)}",
-
             f"{self._translate_doc('Packing')}: {self._translate_doc('Standard export packing')}",
-
             f"{self._translate_doc('Delivery')}: {self._translate_doc('15-25 days after deposit')}",
-
             f"{self._translate_doc('Validity')}: {self._translate_doc('Please confirm within validity period')}"
-
         ]
+        # Append extra fields if provided
+        _xtra = []
+        if self.contract_no: _xtra.append(f"Contract No: {self.contract_no}")
+        if self.po_no: _xtra.append(f"P.O. No: {self.po_no}")
+        if self.lc_no: _xtra.append(f"L/C No: {self.lc_no}")
+        if self.hs_code: _xtra.append(f"HS Code: {self.hs_code}")
+        if self.shipping_marks: _xtra.append(f"Shipping Marks: {self.shipping_marks}")
+        if self.freight: _xtra.append(f"Freight: {self.freight}")
+        if self.insurance: _xtra.append(f"Insurance: {self.insurance}")
+        if self.handling: _xtra.append(f"Handling: {self.handling}")
+        if self.delivery_time: _xtra.append(f"Delivery Time: {self.delivery_time}")
+        if _xtra:
+            terms.append("—" * 20)
+            terms.extend(_xtra)
 
         
 

@@ -1090,6 +1090,38 @@ async def upload_logo(file: UploadFile = File(...), user: dict = Depends(get_cur
     return {"path": str(logo_path)}
 
 
+# Bank info storage (replaces localStorage)
+BANK_INFO_FILE = os.path.join(os.path.dirname(__file__), "data", "bank_info.json")
+
+@app.post("/api/bank/save")
+async def save_bank_info(
+    beneficiary: str = Form(""),
+    bank_name: str = Form(""),
+    bank_address: str = Form(""),
+    account_no: str = Form(""),
+    swift_code: str = Form(""),
+    user: User = Depends(get_current_user)):
+    os.makedirs(os.path.dirname(BANK_INFO_FILE), exist_ok=True)
+    data = {
+        "beneficiary": beneficiary,
+        "bank_name": bank_name,
+        "bank_address": bank_address,
+        "account_no": account_no,
+        "swift_code": swift_code,
+    }
+    with open(BANK_INFO_FILE, "w") as f:
+        json.dump(data, f)
+    return {"status": "ok"}
+
+@app.get("/api/bank/load")
+async def load_bank_info(user: User = Depends(get_current_user)):
+    try:
+        with open(BANK_INFO_FILE, "r") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
 #  Parse file (2-step pipeline) 
 
 @app.post("/api/parse")
@@ -1098,7 +1130,7 @@ async def parse_file(
 
     file: UploadFile = File(...),
 
-    user: User = Depends(get_current_user_optional),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_session)):
 
     ext = Path(file.filename).suffix.lower()
@@ -1109,14 +1141,9 @@ async def parse_file(
 
 
     # Free user upload limit check
-
-    if user:
-
-        from auth import check_upload_limit
-
-        if not await check_upload_limit(user, db):
-
-            raise HTTPException(403, "Free users limited to 20 uploads/month. Upgrade Pro to remove limit.")
+    from auth import check_upload_limit
+    if not await check_upload_limit(user, db):
+        raise HTTPException(403, "Free users limited to 20 uploads/month. Upgrade Pro to remove limit.")
 
 
     ts = datetime.now().strftime("%Y%m%d%H%M%S")
@@ -1260,12 +1287,9 @@ async def parse_file(
 
         
 
-        # 上传成功计数(仅登录用户
-        if user:
-
-            from auth import increment_upload
-
-            await increment_upload(user, db)
+        # 上传成功计数
+        from auth import increment_upload
+        await increment_upload(user, db)
 
         
 
@@ -1514,9 +1538,20 @@ async def generate_quotation(
 
     with_images: str = Form("1"),
 
+    contract_no: str = Form(""),
+    po_no: str = Form(""),
+    lc_no: str = Form(""),
+    hs_code: str = Form(""),
+    shipping_marks: str = Form(""),
+    freight: str = Form(""),
+    insurance: str = Form(""),
+    handling: str = Form(""),
+    delivery_time: str = Form(""),
+    validity_days: str = Form(""),
+
     db: AsyncSession = Depends(get_session),
 
-    authorization: str = Header(None)):
+    user: User = Depends(get_current_user)):
 
     
     import pandas as pd
@@ -1595,6 +1630,16 @@ async def generate_quotation(
                 company_info=company_info if company_info else None,
                 payment_terms=payment_terms,
                 currency=currency,
+                contract_no=contract_no,
+                po_no=po_no,
+                lc_no=lc_no,
+                hs_code=hs_code,
+                shipping_marks=shipping_marks,
+                freight=freight,
+                insurance=insurance,
+                handling=handling,
+                delivery_time=delivery_time,
+                validity_days=validity_days,
             ),
         )
 
@@ -1603,20 +1648,13 @@ async def generate_quotation(
         logger.error("报价单生成失败: %s", e, exc_info=True)
         raise HTTPException(500, f"报价单生成失败: {e}")
 
-    # Auto-save to quotation history if user is logged in
-
+    # Auto-save to quotation history
     quotation_id = None 
-
     try: 
-
-        user = await get_current_user_optional(authorization, db) 
-
-        if user:
-
-            from product_repo import save_quotation
-            uid = user.id
-            fname = f"报价单_{ts}.xlsx"
-            quotation_id = save_quotation(uid, json.dumps(items), fname, str(output_path))
+        from product_repo import save_quotation
+        uid = user.id
+        fname = f"报价单_{ts}.xlsx"
+        quotation_id = save_quotation(uid, json.dumps(items), fname, str(output_path))
 
     except Exception as e: 
 
@@ -1708,9 +1746,7 @@ async def generate_quotation_pdf(
 
     db: AsyncSession = Depends(get_session),
 
-    authorization: str = Header(None)):
-
-    user = await get_current_user_optional(authorization, db)
+    user: User = Depends(get_current_user)):
 
     items = json.loads(products)
 
@@ -1749,50 +1785,25 @@ async def generate_quotation_pdf(
 
 
 @app.post("/api/pi")
-
 async def generate_pi(
-
     products: str = Form(...),
-
     lang: str = Form("chinese"),
-
-    buyer_name: str = Form(""),
-
-    buyer_address: str = Form(""),
-
-    trade_terms: str = Form("FOB"),
-
-    payment_terms: str = Form(DEFAULT_PAYMENT_TERMS),
-
-    port_destination: str = Form(""),
-
-    brand_name: str = Form(""),
-
-    currency: str = Form("USD"),
-
-    buyer_contact: str = Form(""),
-
-    buyer_tel: str = Form(""),
-
-    buyer_email: str = Form(""),
-
-    bank_beneficiary: str = Form(""),
-
-    bank_name: str = Form(""),
-
-    bank_address: str = Form(""),
-
-    bank_account: str = Form(""),
-
-    bank_swift: str = Form(""),
-
     with_images: str = Form("1"),
-
+    trade_terms: str = Form("exw"),
+    currency: str = Form("CNY"),
+    company_info: str = Form("{}"),
+    buyer_info: str = Form(""),
+    payment_terms: str = Form(""),
+    shipping_marks: str = Form(""),
+    bank_info: str = Form(""),
     db: AsyncSession = Depends(get_session),
 
-    authorization: str = Header(None)):
-
-    user = await get_current_user_optional(authorization, db)
+    user: User = Depends(get_current_user)):
+    # Pro 功能校验
+    _pro_user = await get_current_user_optional(authorization, db)
+    if not _pro_user:
+        raise HTTPException(401, "请先登录")
+    require_pro(_pro_user)
 
     items = json.loads(products)
 

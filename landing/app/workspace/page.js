@@ -59,7 +59,8 @@ export default function WorkspacePage() {
 
 function UploadSection({ onSaveSuccess }) {
   const { locale } = useLocale();
-  const [inputTab, setInputTab] = useState('file');
+  const [inputTab, setInputTab2] = useState('file');
+  const setInputTab = (tab) => { if (tab === 'smartpaste' && user?.tier !== 'pro') return; setInputTab2(tab); };
   const [dragOver, setDragOver] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState(null);
@@ -81,7 +82,7 @@ function UploadSection({ onSaveSuccess }) {
     try {
       const fd = new FormData(); fd.append('file', file);
       const ac = new AbortController(); const tid = setTimeout(() => ac.abort(), 120000);
-      const res = await fetch(API_BASE + '/api/parse', { method: 'POST', body: fd, signal: ac.signal });
+      const res = await fetch(API_BASE + '/api/parse', { method: 'POST', body: fd, signal: ac.signal, headers: { 'Authorization': 'Bearer ' + getToken() } });
       clearTimeout(tid);
       if (!res.ok) { const e = await res.json().catch(() => ({ detail: t('workspace.upload.parseError', locale) })); throw new Error(e.detail || t('workspace.upload.serverError', locale)); }
       const d = await res.json(); setProducts(d.products || []);
@@ -161,10 +162,12 @@ function UploadSection({ onSaveSuccess }) {
           className={'px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ' + (inputTab === 'file' ? 'border-[var(--navy)] text-[var(--navy)]' : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--navy)]')}>
           📁 {t('workspace.upload.title', locale)}
         </button>
+        {user?.tier === 'pro' && (
         <button onClick={() => setInputTab('smartpaste')}
           className={'px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ' + (inputTab === 'smartpaste' ? 'border-[var(--navy)] text-[var(--navy)]' : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--navy)]')}>
           📋 {t('workspace.upload.pasteTab', locale)}
         </button>
+        )}
       </div>
 
       {inputTab === 'file' && (
@@ -506,6 +509,17 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
       b.append('packing_type', packingType);
       b.append('packing_qty', packingQty);
       b.append('with_images', includeImages ? '1' : '0');
+      // Extra fields from export panel
+      b.append('contract_no', contractNo || '');
+      b.append('po_no', poNo || '');
+      b.append('lc_no', lcNo || '');
+      b.append('hs_code', hsCode || '');
+      b.append('shipping_marks', shippingMarks || '');
+      b.append('freight', freight || '');
+      b.append('insurance', insurance || '');
+      b.append('handling', handling || '');
+      b.append('delivery_time', deliveryTime || '');
+      b.append('validity_days', validity || '');
 
       if (exportType === 'pi' || exportType === 'invoice') {
         b.append('port_destination', piPort);
@@ -513,12 +527,15 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
         b.append('payment_terms', piPaymentTerms);
         b.append('currency', piCurrency);
         try {
-          const bank = JSON.parse(localStorage.getItem('bank_info') || '{}');
-          if (bank.beneficiary) b.append('bank_beneficiary', bank.beneficiary);
-          if (bank.bank_name) b.append('bank_name', bank.bank_name);
-          if (bank.bank_address) b.append('bank_address', bank.bank_address);
-          if (bank.account_no) b.append('bank_account', bank.account_no);
-          if (bank.swift_code) b.append('bank_swift', bank.swift_code);
+          const bankRes = await fetch(API_BASE + '/api/bank/load', { headers: { 'Authorization': 'Bearer ' + getToken() } });
+          if (bankRes.ok) {
+            const bank = await bankRes.json();
+            if (bank.beneficiary) b.append('bank_beneficiary', bank.beneficiary);
+            if (bank.bank_name) b.append('bank_name', bank.bank_name);
+            if (bank.bank_address) b.append('bank_address', bank.bank_address);
+            if (bank.account_no) b.append('bank_account', bank.account_no);
+            if (bank.swift_code) b.append('bank_swift', bank.swift_code);
+          }
         } catch (e) {}
       }
 

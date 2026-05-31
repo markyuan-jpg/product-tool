@@ -33,7 +33,7 @@ export default function LoginPage() {
       const res = await fetch(`${API_BASE}/api/auth/login`, { method: 'POST', body, signal: controller.signal });
       clearTimeout(timeoutId);
       const data = await res.json();
-      if (!res.ok) throw new Error(e.detail || t('auth.loginFailed', locale));
+      if (!res.ok) throw new Error(data.detail || t('auth.loginFailed', locale));
       saveToken(data.token, data.user);
       router.push('/workspace');
     } catch (err) {
