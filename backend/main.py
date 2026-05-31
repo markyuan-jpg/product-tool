@@ -177,11 +177,15 @@ CORS_ORIGINS = [
     "http://localhost:8000",
 ]
 if BASE_URL:
+    # BASE_URL should be the frontend domain, e.g. https://quoteflow.it.com
     CORS_ORIGINS.append(BASE_URL)
-    # Also allow www. variant (e.g. https://www.quoteflow.it.com)
     WWW_BASE_URL = BASE_URL.replace("://", "://www.")
     if WWW_BASE_URL != BASE_URL:
         CORS_ORIGINS.append(WWW_BASE_URL)
+else:
+    # Fallback: allow both www and non-www for the production frontend
+    CORS_ORIGINS.append("https://quoteflow.it.com")
+    CORS_ORIGINS.append("https://www.quoteflow.it.com")
 
 app.add_middleware(
     CORSMiddleware,
