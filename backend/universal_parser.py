@@ -11,47 +11,47 @@ from openpyxl import load_workbook
 
 logger = logging.getLogger(__name__)
 
-    # 非产品行过滤模式 — 这些模式匹配的行不应被当作产品
-    _NON_PRODUCT_MODEL_PATTERNS = [
-        # English field labels: "CONTRACT NO.:", "SELLER:", "Email: ..."
-        re.compile(r'^(contract|seller|buyer|payment|shipping|delivery|transshipment|remarks?|note|terms|conditions?|address|tel[.:\s]|fax[.:\s]|email|phone|website|bank|account|beneficiary|swift|contact|signature|date|invoice|validity|description)', re.I),
-        # Totals and subtotals
-        re.compile(r'^(total\s+amount|total\s+payment|grand\s+total|sub\s*total)', re.I),
-        # Numbered clauses: "5. Transshipment:", "8. Bank Information:"
-        re.compile(r'^\d+[.、\s]\s*(transshipment|payment|delivery|packing|insurance|bank|inspection|arbitration|force\s*majeure|shipping|terms?|conditions?)', re.I),
-        # Chinese field labels: "付款方式：", "合同编号："
-        re.compile(r'^(合同|卖方|买方|付款|交货|运输|包装|条款|备注|说明|地址|电话|邮箱|日期|受益|银行|账户|签名|签字|合计|总计|金额|小计|编号|序号)', re.I),
-        # Bare price/currency lines: "$ 1,000", "USD 500"
-        re.compile(r'^(\u00a5|\$|eur|usd|cny)\s*[\d,]+', re.I),
-        # Company info lines: "公司名称", "供应商", "客户"
-        re.compile(r'^(company|supplier|customer|buyer|seller)(\s|$)', re.I),
-        # Chinese numbered clauses: "1. 本合同签订...", "4. 摩托车品牌..."
-        re.compile(r'^\d+[.、]\s*[（(]?\s*(本合|支付|交[货付]|运[输送]|包[装]|条[款]|备[注]|说[明]|地[址]|电[话]|日[期]|银[行]|账[户]|签[名字]|仲裁|保险)', re.I),
-        # Document titles and address lines
-        re.compile(r'^(proforma\s+invoice|sales\s+contract|to\s*:|the\s+(seller|buyer)|sign(ed|ature)|date\s+of\s+)', re.I),
-        # Total payment text lines
-        re.compile(r'^total\s+payment', re.I),
-        # Port/brand/shipping clause lines
-        re.compile(r'^\d+[.、]\s*(port\s+of|brand\s+name|handling\s+method|other\s+notices|motorcycle\s+brand)', re.I),
-        # Signature and stamp lines
-        re.compile(r'^\(signed|\(stamp|\(seal|signature\s+by|authorized\s+sign', re.I),
-        # Auto-generated model placeholders
-        re.compile(r'^(产品_r\d+|商品_×\d+)$'),
-        # Document/order reference numbers (look like model codes but aren't products)
-        re.compile(r'^(contract\s*no|order\s*no|po\s*no|invoice\s*no|ref\s*no|payment\s*no)\s*[:\-\.]?\s*[\w\-]+', re.I),
-        re.compile(r'^(shipment\s*no|delivery\s*no|doc\s*no|document\s*no|quotation\s*no|quote\s*no)\s*[:\-\.]?\s*[\w\-]+', re.I),
-        re.compile(r'^(PO|SO|CO|DO|WO|IV|INV|CT|CN|QT|RFQ|PI|DN|GRN)[\d\-]{8,20}$'),  # 常见文档编号前缀
-        # Packing list headers
-        re.compile(r'^(packing\s*(list|detail|info)|装箱(单|明细|清单))', re.I),
-        # Notification / declaration lines
-        re.compile(r'^(notify\s+party|consignee|carrier|forwarder|agent)', re.I),
-        # Quality / test report identifiers
-        re.compile(r'^(test\s+report|inspection\s+report|certificate\s+of)', re.I),
-        # Unit of measure lines
-        re.compile(r'^(unit\s+(of|in)|uom|计量单位|单位[：:])', re.I),
-        # Country of origin
-        re.compile(r'^(country\s+of\s+origin|made\s+in|原产地|manufacturer)', re.I),
-    ]]
+# 非产品行过滤模式 — 这些模式匹配的行不应被当作产品
+_NON_PRODUCT_MODEL_PATTERNS = [
+    # English field labels: "CONTRACT NO.:", "SELLER:", "Email: ..."
+    re.compile(r'^(contract|seller|buyer|payment|shipping|delivery|transshipment|remarks?|note|terms|conditions?|address|tel[.:\s]|fax[.:\s]|email|phone|website|bank|account|beneficiary|swift|contact|signature|date|invoice|validity|description)', re.I),
+    # Totals and subtotals
+    re.compile(r'^(total\s+amount|total\s+payment|grand\s+total|sub\s*total)', re.I),
+    # Numbered clauses: "5. Transshipment:", "8. Bank Information:"
+    re.compile(r'^\d+[.、\s]\s*(transshipment|payment|delivery|packing|insurance|bank|inspection|arbitration|force\s*majeure|shipping|terms?|conditions?)', re.I),
+    # Chinese field labels: "付款方式：", "合同编号："
+    re.compile(r'^(合同|卖方|买方|付款|交货|运输|包装|条款|备注|说明|地址|电话|邮箱|日期|受益|银行|账户|签名|签字|合计|总计|金额|小计|编号|序号)', re.I),
+    # Bare price/currency lines: "$ 1,000", "USD 500"
+    re.compile(r'^(\u00a5|\$|eur|usd|cny)\s*[\d,]+', re.I),
+    # Company info lines: "公司名称", "供应商", "客户"
+    re.compile(r'^(company|supplier|customer|buyer|seller)(\s|$)', re.I),
+    # Chinese numbered clauses: "1. 本合同签订...", "4. 摩托车品牌..."
+    re.compile(r'^\d+[.、]\s*[（(]?\s*(本合|支付|交[货付]|运[输送]|包[装]|条[款]|备[注]|说[明]|地[址]|电[话]|日[期]|银[行]|账[户]|签[名字]|仲裁|保险)', re.I),
+    # Document titles and address lines
+    re.compile(r'^(proforma\s+invoice|sales\s+contract|to\s*:|the\s+(seller|buyer)|sign(ed|ature)|date\s+of\s+)', re.I),
+    # Total payment text lines
+    re.compile(r'^total\s+payment', re.I),
+    # Port/brand/shipping clause lines
+    re.compile(r'^\d+[.、]\s*(port\s+of|brand\s+name|handling\s+method|other\s+notices|motorcycle\s+brand)', re.I),
+    # Signature and stamp lines
+    re.compile(r'^\(signed|\(stamp|\(seal|signature\s+by|authorized\s+sign', re.I),
+    # Auto-generated model placeholders
+    re.compile(r'^(产品_r\d+|商品_×\d+)$'),
+    # Document/order reference numbers (look like model codes but aren't products)
+    re.compile(r'^(contract\s*no|order\s*no|po\s*no|invoice\s*no|ref\s*no|payment\s*no)\s*[:\-\.]?\s*[\w\-]+', re.I),
+    re.compile(r'^(shipment\s*no|delivery\s*no|doc\s*no|document\s*no|quotation\s*no|quote\s*no)\s*[:\-\.]?\s*[\w\-]+', re.I),
+    re.compile(r'^(PO|SO|CO|DO|WO|IV|INV|CT|CN|QT|RFQ|PI|DN|GRN)[\d\-]{8,20}$'),  # 常见文档编号前缀
+    # Packing list headers
+    re.compile(r'^(packing\s*(list|detail|info)|装箱(单|明细|清单))', re.I),
+    # Notification / declaration lines
+    re.compile(r'^(notify\s+party|consignee|carrier|forwarder|agent)', re.I),
+    # Quality / test report identifiers
+    re.compile(r'^(test\s+report|inspection\s+report|certificate\s+of)', re.I),
+    # Unit of measure lines
+    re.compile(r'^(unit\s+(of|in)|uom|计量单位|单位[：:])', re.I),
+    # Country of origin
+    re.compile(r'^(country\s+of\s+origin|made\s+in|原产地|manufacturer)', re.I),
+]
 
 
 def _filter_non_product_rows(df):
