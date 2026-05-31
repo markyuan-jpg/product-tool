@@ -275,7 +275,8 @@ def match_column_fuzzy(header_value) -> str:
     
     model_keywords = ['型号', 'model', '产品型号', 'item#', '产品编码', 
                    '货号', 'code', 'no.', '编号', 'item no', 'part no', 'sku',
-                   '物料编码', '料号', '款号', 'product no', 'reference no']
+                   '物料编码', '料号', '款号', 'product no', 'reference no',
+                   '规格型号', '品号', 'oem no', 'style no']
     for kw in model_keywords:
         if kw in text:
             return 'model'
@@ -286,9 +287,11 @@ def match_column_fuzzy(header_value) -> str:
         if kw in text:
             return 'name'
     
-    spec_keywords = ['规格', 'spec', '参数', '产品描述', 'description', '产品说明',
-                   '规格型号', 'specification', 'detail', 'details', 'specs',
-                   '尺寸', '材质', '颜色', '说明', '配置']
+    spec_keywords = ['规格', 'spec', '参数', '产品描述', '产品说明', 'description',
+                    'specification', 'detail', 'details', 'specs', 'specifications',
+                    '尺寸', '材质', '颜色', '配置', 'config', '参数表',
+                    '技术参数', '性能参数', '产品参数',
+                    '主要规格', '规格参数', 'technical specification']
     for kw in spec_keywords:
         if kw in text:
             return 'spec'
@@ -996,9 +999,18 @@ def parse_excel_v3(file_path: str, wb=None) -> Optional[pd.DataFrame]:
     # 过滤明显不是产品的行
     if not df.empty and 'model' in df.columns:
         _bad_pats = [
-            re.compile(r'^(contract|seller|buyer|payment|shipping|delivery|transshipment|remarks?|note|terms|conditions?|address|tel|fax|email|phone|website|bank|account|beneficiary|swift|contact|signature|date|invoice|validity|total|subtotal|amount)', re.I),
+            re.compile(r'^(contract|seller|buyer|payment|shipping|delivery|transshipment|remarks?|note|terms|conditions?|address|tel[.:\\s]|fax[.:\\s]|email|phone|website|bank|account|beneficiary|swift|contact|signature|date|invoice|validity|description)', re.I),
             re.compile(r'^(合同|卖方|买方|付款|交货|运输|包装|条款|备注|说明|地址|电话|邮箱|日期|受益|银行|账户|签名|签字|合计|总计|金额|小计|编号|序号)', re.I),
             re.compile(r'^(company|supplier|customer|buyer|seller)(\s|$)', re.I),
+            re.compile(r'^(total\s+amount|total\s+payment|grand\s+total|sub\s*total)', re.I),
+            re.compile(r'^(PO|SO|CO|DO|WO|IV|INV|CT|CN|QT|RFQ|PI|DN|GRN)[\d\-]{8,20}$'),  # 文档编号
+            re.compile(r'^(contract\s*no|order\s*no|po\s*no|invoice\s*no|ref\s*no|payment\s*no|shipment\s*no|delivery\s*no|doc\s*no|quotation\s*no|quote\s*no)\s*[:\-.]?\s*[\w\-]+', re.I),
+            re.compile(r'^(packing\s*(list|detail|info)|装箱(单|明细|清单)|notify\s+party|consignee|carrier|forwarder|agent)', re.I),
+            re.compile(r'^(test\s+report|inspection\s+report|certificate\s+of)', re.I),
+            re.compile(r'^(unit\s+(of|in)|uom|计量单位|单位[：:])', re.I),
+            re.compile(r'^(country\s+of\s+origin|made\s+in|原产地|manufacturer)', re.I),
+            re.compile(r'^(仲裁|保险|商检|产地证|原产地|信用证|l/?c|t/?t|不可抗力)', re.I),
+            re.compile(r'^(\u00a5|\$|eur|usd|cny)\s*[\d,]+', re.I),
         ]
         keep = pd.Series(True, index=df.index)
         for i, row in df.iterrows():

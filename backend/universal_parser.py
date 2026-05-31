@@ -11,33 +11,47 @@ from openpyxl import load_workbook
 
 logger = logging.getLogger(__name__)
 
-# 非产品行过滤模式 — 这些模式匹配的行不应被当作产品
-_NON_PRODUCT_MODEL_PATTERNS = [
-    # English field labels: "CONTRACT NO.:", "SELLER:", "Email: ..."
-    re.compile(r'^(contract|seller|buyer|payment|shipping|delivery|transshipment|remarks?|note|terms|conditions?|address|tel[.:\s]|fax[.:\s]|email|phone|website|bank|account|beneficiary|swift|contact|signature|date|invoice|validity|description)', re.I),
-    # Totals and subtotals
-    re.compile(r'^(total\s+amount|total\s+payment|grand\s+total|sub\s*total)', re.I),
-    # Numbered clauses: "5. Transshipment:", "8. Bank Information:"
-    re.compile(r'^\d+[.、\s]\s*(transshipment|payment|delivery|packing|insurance|bank|inspection|arbitration|force\s*majeure|shipping|terms?|conditions?)', re.I),
-    # Chinese field labels: "付款方式：", "合同编号："
-    re.compile(r'^(合同|卖方|买方|付款|交货|运输|包装|条款|备注|说明|地址|电话|邮箱|日期|受益|银行|账户|签名|签字|合计|总计|金额|小计|编号|序号)', re.I),
-    # Bare price/currency lines: "$ 1,000", "USD 500"
-    re.compile(r'^(\u00a5|\$|eur|usd|cny)\s*[\d,]+', re.I),
-    # Company info lines: "公司名称", "供应商", "客户"
-    re.compile(r'^(company|supplier|customer|buyer|seller)(\s|$)', re.I),
-    # Chinese numbered clauses: "1. 本合同签订...", "4. 摩托车品牌..."
-    re.compile(r'^\d+[.、]\s*[（(]?\s*(本合|支付|交[货付]|运[输送]|包[装]|条[款]|备[注]|说[明]|地[址]|电[话]|日[期]|银[行]|账[户]|签[名字]|仲裁|保险)', re.I),
-    # Document titles and address lines
-    re.compile(r'^(proforma\s+invoice|sales\s+contract|to\s*:|the\s+(seller|buyer)|sign(ed|ature)|date\s+of\s+)', re.I),
-    # Total payment text lines
-    re.compile(r'^total\s+payment', re.I),
-    # Port/brand/shipping clause lines
-    re.compile(r'^\d+[.、]\s*(port\s+of|brand\s+name|handling\s+method|other\s+notices|motorcycle\s+brand)', re.I),
-    # Signature and stamp lines
-    re.compile(r'^\(signed|\(stamp|\(seal|signature\s+by|authorized\s+sign', re.I),
-    # Auto-generated model placeholders
-    re.compile(r'^(产品_r\d+|商品_×\d+)$'),
-]
+    # 非产品行过滤模式 — 这些模式匹配的行不应被当作产品
+    _NON_PRODUCT_MODEL_PATTERNS = [
+        # English field labels: "CONTRACT NO.:", "SELLER:", "Email: ..."
+        re.compile(r'^(contract|seller|buyer|payment|shipping|delivery|transshipment|remarks?|note|terms|conditions?|address|tel[.:\s]|fax[.:\s]|email|phone|website|bank|account|beneficiary|swift|contact|signature|date|invoice|validity|description)', re.I),
+        # Totals and subtotals
+        re.compile(r'^(total\s+amount|total\s+payment|grand\s+total|sub\s*total)', re.I),
+        # Numbered clauses: "5. Transshipment:", "8. Bank Information:"
+        re.compile(r'^\d+[.、\s]\s*(transshipment|payment|delivery|packing|insurance|bank|inspection|arbitration|force\s*majeure|shipping|terms?|conditions?)', re.I),
+        # Chinese field labels: "付款方式：", "合同编号："
+        re.compile(r'^(合同|卖方|买方|付款|交货|运输|包装|条款|备注|说明|地址|电话|邮箱|日期|受益|银行|账户|签名|签字|合计|总计|金额|小计|编号|序号)', re.I),
+        # Bare price/currency lines: "$ 1,000", "USD 500"
+        re.compile(r'^(\u00a5|\$|eur|usd|cny)\s*[\d,]+', re.I),
+        # Company info lines: "公司名称", "供应商", "客户"
+        re.compile(r'^(company|supplier|customer|buyer|seller)(\s|$)', re.I),
+        # Chinese numbered clauses: "1. 本合同签订...", "4. 摩托车品牌..."
+        re.compile(r'^\d+[.、]\s*[（(]?\s*(本合|支付|交[货付]|运[输送]|包[装]|条[款]|备[注]|说[明]|地[址]|电[话]|日[期]|银[行]|账[户]|签[名字]|仲裁|保险)', re.I),
+        # Document titles and address lines
+        re.compile(r'^(proforma\s+invoice|sales\s+contract|to\s*:|the\s+(seller|buyer)|sign(ed|ature)|date\s+of\s+)', re.I),
+        # Total payment text lines
+        re.compile(r'^total\s+payment', re.I),
+        # Port/brand/shipping clause lines
+        re.compile(r'^\d+[.、]\s*(port\s+of|brand\s+name|handling\s+method|other\s+notices|motorcycle\s+brand)', re.I),
+        # Signature and stamp lines
+        re.compile(r'^\(signed|\(stamp|\(seal|signature\s+by|authorized\s+sign', re.I),
+        # Auto-generated model placeholders
+        re.compile(r'^(产品_r\d+|商品_×\d+)$'),
+        # Document/order reference numbers (look like model codes but aren't products)
+        re.compile(r'^(contract\s*no|order\s*no|po\s*no|invoice\s*no|ref\s*no|payment\s*no)\s*[:\-\.]?\s*[\w\-]+', re.I),
+        re.compile(r'^(shipment\s*no|delivery\s*no|doc\s*no|document\s*no|quotation\s*no|quote\s*no)\s*[:\-\.]?\s*[\w\-]+', re.I),
+        re.compile(r'^(PO|SO|CO|DO|WO|IV|INV|CT|CN|QT|RFQ|PI|DN|GRN)[\d\-]{8,20}$'),  # 常见文档编号前缀
+        # Packing list headers
+        re.compile(r'^(packing\s*(list|detail|info)|装箱(单|明细|清单))', re.I),
+        # Notification / declaration lines
+        re.compile(r'^(notify\s+party|consignee|carrier|forwarder|agent)', re.I),
+        # Quality / test report identifiers
+        re.compile(r'^(test\s+report|inspection\s+report|certificate\s+of)', re.I),
+        # Unit of measure lines
+        re.compile(r'^(unit\s+(of|in)|uom|计量单位|单位[：:])', re.I),
+        # Country of origin
+        re.compile(r'^(country\s+of\s+origin|made\s+in|原产地|manufacturer)', re.I),
+    ]]
 
 
 def _filter_non_product_rows(df):
@@ -332,23 +346,25 @@ def map_columns(ws, header_row: int) -> dict:
     if 'name_col' not in col_map and 'model_col' in col_map:
         col_map['name_col'] = col_map['model_col']
 
-    # model_col 不设默认0 → 检查各列是否含图片/DISPIMG
-    def _is_image_col(c):
-        v = str(ws.cell(header_row, c).value or '').lower()
-        if any(kw in v for kw in ['photo', 'image', 'picture', '图片', '照片']):
-            return True
-        # 检查前几行数据是否含 DISPIMG 公式
-        for r in range(header_row + 1, min(header_row + 5, ws.max_row + 1)):
-            cv = str(ws.cell(r, c).value or '')
-            if 'dispimg' in cv.lower() or cv.startswith('=') or ('image' in cv.lower() and len(cv) > 30):
-                return True
-        return False
-
+    # model_col 不设默认值 → 避免把名称/文档列当型号
     if 'model_col' not in col_map:
-        model_candidate = 0
-        while model_candidate < max_col and _is_image_col(model_candidate + 1):
-            model_candidate += 1
-        col_map['model_col'] = min(model_candidate, max_col - 1)
+        # 尝试从内容推断 model 列（找含最多型号代码的列）
+        best_model_col = -1
+        best_model_count = 0
+        for c in range(min(max_col, 30)):
+            model_count = 0
+            content_count = 0
+            for r in range(header_row + 1, min(header_row + 10, ws.max_row + 1, header_row + 30)):
+                v = str(ws.cell(r, c + 1).value or '').strip()
+                if v:
+                    content_count += 1
+                    if re.search(r'^[A-Za-z0-9][A-Za-z0-9\-_\./]+$', v) and not str(v).isdigit():
+                        model_count += 1
+            if content_count >= 2 and model_count >= content_count * 0.5 and model_count > best_model_count:
+                best_model_count = model_count
+                best_model_col = c
+        if best_model_col >= 0:
+            col_map['model_col'] = best_model_col
 
     if 'price_col' not in col_map:
         # 价格列兜底：找最后一列有数字数据的列
@@ -375,8 +391,9 @@ def map_columns(ws, header_row: int) -> dict:
         elif any(kw in header_text for kw in ['rmb', 'cny', '¥', '元']):
             col_map['currency'] = 'CNY'
 
-    if 'spec_col' not in col_map and 'name_col' in col_map:
-        col_map['spec_col'] = col_map['name_col'] + 1 if col_map['name_col'] + 1 < max_col else col_map['name_col']
+    # spec_col 无检测时不强制兜底 → 避免型号/名称被塞进规格
+    # 旧代码: if 'spec_col' not in col_map and 'name_col' in col_map: col_map['spec_col'] = name_col + 1
+    # 改为: 只在确认 spec 有内容时才保留
     return col_map
 
 # ─── KV 布局检测 ───
@@ -544,9 +561,48 @@ def _is_product_row(first_cell: str, qty_val, price_val) -> bool:
     # 跳过纯图片公式行
     if first_cell.startswith('=') and 'dispimg' in first_cell.lower():
         pass  # 靠下面的价格判断决定
+    
+    # ─── 快速否决：文档字段/编号模式 ───
+    fc_lower = first_cell.lower().strip()
+    # 订单号/合同号/参考号模式（这些看起来像型号但实际是文档编号）
+    _doc_number_patterns = [
+        re.compile(r'^(contract|order|po|p\.?o\.?|invoice|quote|ref|reference|date|payment|delivery|shipment|document|doc)(\s*(no|#|number|\.?))?\s*[:\-\.]?\s*[\w\-\d]+', re.I),
+        re.compile(r'^(contract\s*no|order\s*no|po\s*no|invoice\s*no|ref\s*no|reference\s*no|doc\s*no|payment\s*no|shipment\s*no|delivery\s*no)', re.I),
+        re.compile(r'^(合同编号|订单编号|订单号|发票号|参考号|文档号|付款编号|运输编号)', re.I),
+        re.compile(r'^(date|dates?)\s*[:\-\.]?\s*[\d\-\/]+', re.I),
+        # Payment method / delivery info lines
+        re.compile(r'^(payment|delivery|shipment|shipping|port\s+of|discharge|loading)\s', re.I),
+        # Company / seller / buyer info (these often appear as first column "model")
+        re.compile(r'^(seller|buyer|supplier|customer|consignee|notify\s+party)\s*[:\-]', re.I),
+        # Shipping marks / container info
+        re.compile(r'^(marks?\s*(&|\s*no|\s*#)|shipping\s*mark|container\s*(no|#))', re.I),
+        # Document type labels
+        re.compile(r'^(proforma|commercial)\s+(invoice|inv)', re.I),
+        re.compile(r'^(certificate\s+of|origin\s+certificate|fumigation|inspection\s+(report|cert))', re.I),
+        # Chinese contract clauses
+        re.compile(r'^(卖方|买方|供应商|客户|收货人|通知方|承运人)', re.I),
+        # Numbered clauses in contracts
+        re.compile(r'^\d+[.、\s]\s*(transshipment|payment|delivery|packing|insurance|bank|inspection|arbitration|force\s*majeure|shipping|terms?|conditions?|warranty|validity|quality)', re.I),
+        # Pure clause text lines
+        re.compile(r'^(仲裁|保险|商检|产地|原产|信用证|l/?c|t/?t|不可抗力)', re.I),
+        # Signature / approval lines
+        re.compile(r'^(sign(ed|ature)?|approv(ed|al)?|authoriz(ed|ation)?|seal|stamp|公章|签字|签名|盖章|审批)', re.I),
+        # Packing list headers misidentified as products
+        re.compile(r'^(packing\s*(list|detail|info)|装箱(单|明细|清单)|mark\s*(nos?|#))', re.I),
+    ]
+    for pat in _doc_number_patterns:
+        if pat.search(fc_lower):
+            return False
+    
     # ─── 正向检测（优先于跳过词，防止误杀） ───
     # 型号模式：字母+数字
     if re.search(r'[A-Za-z]+\d+', first_cell) and len(first_cell) < 40:
+        # 额外检查：如果是订单号/合同号风格（字母部分在头部，然后是数字），过滤
+        # 如 "PO20250516", "CT20250516", "INV20250516"
+        if re.match(r'^[A-Za-z]{2,4}[\d\-]{6,15}$', first_cell) and len(first_cell) <= 20:
+            # 可能: "PO20250516" -> 这是订单号，不是产品。只有短型号才放过（≤12字符）
+            if len(first_cell) > 12:
+                return False
         return True
     # 有价格（用 clean_price_text 支持 '0.15/片'）
     clean_p = clean_price_text(price_val)
@@ -570,10 +626,9 @@ def _is_product_row(first_cell: str, qty_val, price_val) -> bool:
                  'warranty', 'oem', 'validity', 'payment',
                  '包邮', '执行', '经销价', '件以下', '件起', '非偏远',
                  '系统价格', '零售价', '批发价', '不含税', '含税价']
-    if any(kw in first_cell.lower() for kw in _skip):
+    if any(kw in fc_lower for kw in _skip):
         return False
     # ─── 定价条款预检（数字起头 + 以下/以上/包邮 → 非产品） ───
-    fc_lower = first_cell.lower()
     if re.search(r'^\d+', first_cell) and any(kw in fc_lower for kw in ['以下', '以上', '包邮', '执行']):
         return False
     # ─── 备选检测 ───
