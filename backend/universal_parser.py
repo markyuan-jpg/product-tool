@@ -301,12 +301,16 @@ def map_columns(ws, header_row: int) -> dict:
     col_map = {}
     actual = _actual_cols(ws, header_row)
     max_col = min(actual + 3, 60)
+    # 按优先级迭代：model→spec→name→price→qty→packing→category→remark
+    # name 最后才检测，避免 description 列被误判为 name
+    _COLUMN_ORDER = ('model', 'spec', 'name', 'price', 'qty', 'packing', 'category', 'remark')
     for c in range(1, min(max_col, ws.max_column + 1)):
         val = str(ws.cell(header_row, c).value or '').strip().lower()
         # 跳过图片/序号列
         if any(sk in val for sk in SKIP_COLUMN_SIGNALS):
             continue
-        for key, signals in COLUMN_SIGNALS.items():
+        for key in _COLUMN_ORDER:
+            signals = COLUMN_SIGNALS.get(key, [])
             k = key + '_col'
             if k in col_map:
                 continue
@@ -656,6 +660,12 @@ def parse_with_colmap(ws, header_row: int, col_map: dict) -> pd.DataFrame:
         price = clean_price_text(price_raw)
         qty = vals[qty_col] if qty_col is not None and qty_col < len(vals) else ''
         spec = vals[spec_col] if spec_col is not None and spec_col < len(vals) else ''
+        # 提取 packing/箱规信息追加到 spec_zh
+        packing_parts = []
+        if packing_col is not None and packing_col < len(vals):
+            pv = vals[packing_col]
+            if pv:
+                packing_parts.append(str(pv))
         first_cell = model or name or next((v for v in vals if v), '')
 
         row_text = ' '.join(v for v in vals if v)
@@ -676,7 +686,7 @@ def parse_with_colmap(ws, header_row: int, col_map: dict) -> pd.DataFrame:
         result.append({
             'model': model or name or f"产品_R{r}",
             'name_zh': name or model or '',
-            'spec_zh': spec or '',
+            'spec_zh': '; '.join(filter(None, [spec] + packing_parts)) or '',
             'price_rmb': price,
             'price_cny': price_cny,
             'qty': qty,
@@ -712,7 +722,9 @@ def _classify_columns_by_content(ws, header_row: int) -> dict:
                 continue
             col_scores[c]['total'] += 1
             vl = val.lower()
-            if re.search(r'[A-Za-z]+\d+', val) and len(val) < 30:
+            # 型号检测：字母开头+至少2位数字，长度<30，不含中文/单位
+            if (re.search(r'^[A-Za-z]+[-]?\d{2,}$', val) and len(val) < 30
+                    and not re.search(r'[\u4e00-\u9fff]|cm|mm|kg|inch|volt|amp|watt|hz|rpm|pcs|set|unit', val.lower())):
                 col_scores[c]['model'] += 2
             price_m = re.search(r'[\d,]+(?:\.\d+)?', val)
             if price_m:

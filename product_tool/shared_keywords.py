@@ -8,26 +8,25 @@
 
 COLUMN_SIGNALS = {
     'name': ['产品名称', '产品名', '品名', '名称', '商品名', '产品', 'product',
-             'name', 'description', '描述', '项目', '物料名称', '货物名称',
+             'name', '项目', '物料名称', '货物名称',
              '品名规格', '商品名称', '产品描述', '物料描述',
-             'item description', 'goods name', 'article name', '产品说明'],
+             'item description', 'goods name', 'article name'],
     'model': ['型号', '产品编号', '物料编码', '料号', '货号', '编码', '商品代码',
               'model', 'part no', 'p/n', 'product no', 'sku', 'item no',
               '款号', 'item code', 'reference no', 'product code',
               'material code', '规格型号', '品号',
               'oe no', 'oem no', 'replacement no',
               'catalog no', 'style no', 'style#'],
-    'spec': ['规格', 'spec', 'specification', '参数', '型号规格', '尺寸', '材质', '配置',
+    'spec': ['规格', 'spec', 'specification', '参数', '尺寸', '材质', '配置',
              'description', '描述', 'specifications', '说明',
              '颜色', 'color', 'size', '尺码', '面料', '成分',
              'material', 'dimension', '功率', 'voltage', 'capacity',
              'purity', '纯度', '含量', '浓度', 'concentration',
              'surface', 'finish', '工艺', '表面处理',
-             '重量', 'weight', 'g.w.', 'n.w.', '净重', '毛重',
-             'gross weight', 'net weight', 'dimension', 'measurement',
              '色温', '流明', 'lumens', '灯头', '显指',
              '适用车型', 'application', '适用年龄', 'age range',
-             '容量', 'capacity', 'voltage', 'current', '频率', 'frequency'],
+             '容量', 'voltage', 'current', '频率', 'frequency',
+             '产品说明', 'detail', 'details'],
     'category': ['类别', '产别', 'type', '种类', '分类', 'category', 'grade', '等级'],
     'price': ['价格', '单价', '出厂价', '系统价格', '成本价', '成本', '报价', '金额', '含税', '成本价',
               'exw', 'fob', 'cif', '批发价', '市场价', '零售价',
@@ -40,7 +39,12 @@ COLUMN_SIGNALS = {
             'pack qty', '数量/箱', '装箱数', '每箱数量',
             '净含量', 'net weight', 'n.w.', '每箱', 'pcs/ctn'],
     'packing': ['包装', '内盒', '外箱', '每箱', 'packing', 'package', '装箱明细', 'packing list',
-                'carton size', '测量', 'meas', 'cbm', '体积', '外箱尺寸'],
+                'carton size', '测量', 'meas', 'cbm', '体积', '外箱尺寸',
+                'carton', 'ctn', '箱规', '装箱', 'pack qty', '每箱数量', 'qty/ctn', 'pcs/ctn',
+                '每箱重量', '体积重', '包装尺寸', 'packing size',
+                '重量', 'weight', 'g.w.', 'n.w.', '净重', '毛重',
+                'gross weight', 'net weight', 'dimension', 'measurement',
+                'units per carton', 'carton weight'],
     'remark': ['备注', 'remark', 'remarks', '条款', 'note', '说明', '附注'],
 }
 
@@ -49,18 +53,19 @@ COLUMN_SIGNALS_FLAT = ['产品名称', '产品名', '品名', '名称', 'name', 
                        '编码', 'qty', '数量', '包装', '备注', '尺寸', '照片', '图片',
                        '款号', '货号', '色号', 'sku', 'item no',
                        '颜色', 'color', '材质', 'material', '面料',
-                       '功率', 'voltage', 'capacity', '净重', '毛重',
+                       '功率', 'voltage', 'capacity',
                        '单价', 'cost', 'rmb', 'fob', 'cif', 'exw',
-                       '等级', 'grade', '类别', 'category']
+                       '等级', 'grade', '类别', 'category',
+                       '箱规', '装箱', 'carton', '每箱', 'packing', 'cbm']
 
 SKIP_COLUMN_SIGNALS = ['serial', 'no.', 'image', 'picture', 'photo', '序号', '图片', '照片']
 
 PRICE_KEYWORDS = ['价格', '单价', '出厂价', '系统价格', '成本价', '成本', '报价', '金额', '含税', '成本价',
-                  'exw', 'fob', 'cif', '批发价', '市场价', '零售价',
-                  'price', 'cost', 'rmb', '总价', '总金额', 'subtotal',
-                  '成交价', '到厂价', 'unit price', 'selling price', 'export price',
-                  'fca', 'ddp', 'cpt', 'cip', 'c&f', 'cfr',
-                  '退税', '含税价', '不含税']
+                   'exw', 'fob', 'cif', '批发价', '市场价', '零售价',
+                   'price', 'cost', 'rmb', '总价', '总金额', 'subtotal',
+                   '成交价', '到厂价', 'unit price', 'selling price', 'export price',
+                   'fca', 'ddp', 'cpt', 'cip', 'c&f', 'cfr',
+                   '退税', '含税价', '不含税', 'usd', '$', 'cny', '¥']
 
 SKIP_HEADER_KEYWORDS = ['公司', '地址', '电话', '联系人', 'mail', 'website', '供应商', 'supplier',
                         'tel', 'fax', 'add', 'buyer', 'consignee', 'shipper', 'invoice', 'date',
@@ -128,6 +133,7 @@ PRODUCT_SKIP_WORDS = ['条款', '备注', '说明', '合计', 'total', 'subtotal
 # ─── 内容推断 spec 关键词 ───
 
 CONTENT_SPEC_KEYWORDS = ['规格', '尺寸', '参数', '材质', '颜色', 'spec', 'size', 'color',
-                         '面料', '成分', 'material', 'dimension', 'weight', '重量',
+                         '面料', '成分', 'material', 'dimension', '重量',
                          '色温', '流明', '功率', 'voltage', '容量', 'capacity',
-                         '纯度', '含量', '浓度', '表面', 'finish', '工艺']
+                         '纯度', '含量', '浓度', '表面', 'finish', '工艺',
+                         '毛重', '净重', 'carton', 'packing', '每箱']

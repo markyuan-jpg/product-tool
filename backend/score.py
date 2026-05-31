@@ -56,11 +56,11 @@ def _is_reasonable_price(p):
     # 排除年份（2024~2029）
     if 2024 <= p <= 2029:
         return False
-    # 排除纯序号（1~50的整数）
-    if 1 <= p <= 50 and p == int(p):
+    # 排除纯序号（1~9的整数）
+    if 1 <= p <= 9 and p == int(p):
         return False
     # 排除极小值
-    if p <= 0.5:
+    if p <= 0.1:
         return False
     # 排除极大值
     if p >= 10000000:
@@ -81,16 +81,15 @@ def score_product_row(model: str, price, spec_zh: str) -> float:
     # 检查model是否包含条款/字段关键词
     _has_field_kw = _contains_field_keyword(m)
 
-    # 真型号检查 - 加强版
+    # 真型号检查 - 放宽版：支持纯中文+数字、纯数字+价格、英文+数字
     is_real = (
         2 <= len(m) <= 30
-        and bool(_REAL_MODEL_RE.search(m))
         and ':' not in m
-        and '\uff1a' not in m
+        and '\uff1a' not in m  # fullwidth colon
         and not _has_field_kw
-        and len(re.findall(r'[\u4e00-\u9fff]', m)) <= 6  # 中文不超过6字（排除纯中文句子）
-        # 必须有数字，或者短字母型号+价格（如 "XP" price=850）
-        and (bool(_REAL_DIGIT_RE.search(m)) or (has_price and len(m) <= 5))
+        and len(re.findall(r'[\u4e00-\u9fff]', m)) <= 10
+        # 至少含数字 OR 有合理价格+短字符串
+        and (bool(_REAL_DIGIT_RE.search(m)) or (has_price and len(m) <= 12))
     )
 
     # 假型号检查

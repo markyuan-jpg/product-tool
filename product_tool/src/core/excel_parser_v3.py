@@ -273,26 +273,29 @@ def match_column_fuzzy(header_value) -> str:
         return None
     text = str(header_value).lower().strip()
     
-    model_keywords = ['型号', 'model', '产品型号', '规格型号', 'item#', '产品编码', 
-                   '货号', 'code', 'no.', '编号', 'item no', 'part no']
+    model_keywords = ['型号', 'model', '产品型号', 'item#', '产品编码', 
+                   '货号', 'code', 'no.', '编号', 'item no', 'part no', 'sku',
+                   '物料编码', '料号', '款号', 'product no', 'reference no']
     for kw in model_keywords:
         if kw in text:
             return 'model'
     
-    name_keywords = ['产品名称', '品名', '名称', 'product name', 'description',
+    name_keywords = ['产品名称', '品名', '名称', 'product name',
                    '商品名称', '品名', 'name', '商品']
     for kw in name_keywords:
         if kw in text:
             return 'name'
     
     spec_keywords = ['规格', 'spec', '参数', '产品描述', 'description', '产品说明',
-                   'specification', 'detail', 'details', 'specs']
+                   '规格型号', 'specification', 'detail', 'details', 'specs',
+                   '尺寸', '材质', '颜色', '说明', '配置']
     for kw in spec_keywords:
         if kw in text:
             return 'spec'
     
     price_keywords = ['价格', 'price', '售价', '报价', '单价', 'unit price',
-                     'rmb', 'cny', 'fob', 'exw', '优惠价', '批发价', 'system price']
+                     'rmb', 'cny', 'fob', 'exw', '优惠价', '批发价', 'system price',
+                     'usd', '$', '¥', '含税']
     for kw in price_keywords:
         if kw in text:
             return 'price'
@@ -301,6 +304,19 @@ def match_column_fuzzy(header_value) -> str:
     for kw in remark_keywords:
         if kw in text:
             return 'remark'
+    
+    qty_keywords = ['数量', 'qty', 'quantity', '起订', 'moq', 'pcs', '订货量',
+                    '每箱数量', 'qty/ctn', 'pcs/ctn', 'pack qty']
+    for kw in qty_keywords:
+        if kw in text:
+            return 'qty'
+    
+    packing_keywords = ['包装', 'packing', 'package', '装箱', 'carton', 'ctn',
+                       'cbm', '体积', '尺寸', '测量', '箱规', '每箱',
+                       'g.w.', 'n.w.', '毛重', '净重', 'gross', 'net weight']
+    for kw in packing_keywords:
+        if kw in text:
+            return 'packing'
     
     return None
 
@@ -336,6 +352,10 @@ def detect_columns(data_rows: List[Dict], header_labels: List[str] = None) -> Di
             col_map['name'] = col_idx
         if 'remark' not in col_map and scores.get('remark', 0) > 0.4:
             col_map['remark'] = col_idx
+        if 'qty' not in col_map and scores.get('qty', 0) > 0.4:
+            col_map['qty'] = col_idx
+        if 'packing' not in col_map and scores.get('packing', 0) > 0.3:
+            col_map['packing'] = col_idx
     
     return col_map
 
@@ -668,6 +688,20 @@ def parse_vertical(ws, images_by_row: Dict[int, str] = None) -> pd.DataFrame:
         if remark_col:
             remark_val = str(row.get(remark_col, '') or '').strip()
         
+        # 提取 packing/箱规信息追加到 spec
+        packing_col_key = _col_key(col_map.get('packing')) if col_map.get('packing') is not None else None
+        if packing_col_key:
+            pv = row.get(packing_col_key)
+            if pv:
+                spec_parts.append(f"[包规] {pv}")
+        
+        # 提取 qty 列信息（每箱数量等）
+        qty_col_key = _col_key(col_map.get('qty')) if col_map.get('qty') is not None else None
+        if qty_col_key:
+            qv = row.get(qty_col_key)
+            if qv:
+                spec_parts.append(f"[起订量/数量] {qv}")
+        
         # 不再收集未映射列到 spec（防污染，与 doc_parser 一致）
         
         result.append({
@@ -958,7 +992,30 @@ def parse_excel_v3(file_path: str, wb=None) -> Optional[pd.DataFrame]:
     if not all_dfs:
         return pd.DataFrame()
     
-    return pd.concat(all_dfs, ignore_index=True)
+    df = pd.concat(all_dfs, ignore_index=True)
+    # 过滤明显不是产品的行
+    if not df.empty and 'model' in df.columns:
+        _bad_pats = [
+            re.compile(r'^(contract|seller|buyer|payment|shipping|delivery|transshipment|remarks?|note|terms|conditions?|address|tel|fax|email|phone|website|bank|account|beneficiary|swift|contact|signature|date|invoice|validity|total|subtotal|amount)', re.I),
+            re.compile(r'^(合同|卖方|买方|付款|交货|运输|包装|条款|备注|说明|地址|电话|邮箱|日期|受益|银行|账户|签名|签字|合计|总计|金额|小计|编号|序号)', re.I),
+            re.compile(r'^(company|supplier|customer|buyer|seller)(\s|$)', re.I),
+        ]
+        keep = pd.Series(True, index=df.index)
+        for i, row in df.iterrows():
+            m = str(row.get('model', '')).strip()
+            if not m:
+                keep.at[i] = False
+                continue
+            for pat in _bad_pats:
+                if pat.search(m):
+                    keep.at[i] = False
+                    break
+            if keep.at[i]:
+                ch = len(re.findall(r'[\u4e00-\u9fff]', m))
+                if ch > 8 and len(m) > 12:
+                    keep.at[i] = False
+        df = df[keep]
+    return df
 
 
 def parse_excel(file_path: str, wb=None) -> Optional[pd.DataFrame]:
