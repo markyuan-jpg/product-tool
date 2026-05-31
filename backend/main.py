@@ -865,7 +865,15 @@ async def serve_image(path: str = Query(...)):
 
     media_type = media_types.get(ext, 'application/octet-stream')
 
-    return FileResponse(str(abs_path), media_type=media_type)
+    # Cache: images static, 24h cache
+    import email.utils
+    _st = abs_path.stat()
+    _headers = {
+        'Cache-Control': 'public, max-age=86400',
+        'ETag': f'"{int(_st.st_mtime)}-{_st.st_size}"',
+        'Last-Modified': email.utils.formatdate(_st.st_mtime, usegmt=True),
+    }
+    return FileResponse(str(abs_path), media_type=media_type, headers=_headers)
 
 
 #  Template: upload file to extract company info 

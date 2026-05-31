@@ -264,7 +264,7 @@ function UploadSection({ onSaveSuccess }) {
                     <td className="py-2 px-4">
                       <div className="w-10 h-10 rounded bg-gray-100 flex items-center justify-center overflow-hidden">
                         {!failedImages.has(i) && (p._image_path || p.image_path) ? (
-                          <img src={API_BASE + '/api/images/?path=' + encodeURIComponent(p._image_path || p.image_path)} alt="" className="w-full h-full object-cover"
+                          <img src={API_BASE + '/api/images/?path=' + encodeURIComponent(p._image_path || p.image_path)} alt="" className="w-full h-full object-cover" loading="lazy"
                             onError={() => setFailedImages(prev => { const n = new Set(prev); n.add(i); return n; })} />
                         ) : <span className="text-xs text-[var(--text-secondary)]">{t('workspace.upload.noImage', locale)}</span>}
                       </div>
@@ -556,7 +556,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
           if (dlR.ok) {
             const blob = await dlR.blob();
             const dlUrl = URL.createObjectURL(blob);
-            const a = document.createElement('a'); a.href = dlUrl; a.download = data.name || filename; a.click();
+            const a = document.createElement('a'); a.href = dlUrl; a.download = data.name || filename; document.body.appendChild(a); a.click(); document.body.removeChild(a);
             setTimeout(() => URL.revokeObjectURL(dlUrl), 5000);
           }
         }
@@ -663,13 +663,13 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
             if (dlR.ok) {
               const blob = await dlR.blob();
               const url = URL.createObjectURL(blob);
-              const a = document.createElement('a'); a.href = url; a.download = item.name; a.click();
+              const a = document.createElement('a'); a.href = url; a.download = item.name; document.body.appendChild(a); a.click(); document.body.removeChild(a);
               setTimeout(() => URL.revokeObjectURL(url), 5000);
             }
           } catch (e) { /* 单个下载失败不影响其他 */ }
         } else if (item.blob) {
           const url = URL.createObjectURL(item.blob);
-          const a = document.createElement('a'); a.href = url; a.download = item.name; a.click();
+          const a = document.createElement('a'); a.href = url; a.download = item.name; document.body.appendChild(a); a.click(); document.body.removeChild(a);
           setTimeout(() => URL.revokeObjectURL(url), 5000);
         }
       }
@@ -1198,7 +1198,7 @@ function QuotationHistorySection({ refreshKey }) {
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
       const cd = r.headers.get('content-disposition');
       a.download = cd ? cd.split('filename=')[1]?.replace(/"/g, '') || 'quotation.xlsx' : 'quotation.xlsx';
-      a.click(); URL.revokeObjectURL(a.href);
+      document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(a.href);
     } catch (err) { alert(t('workspace.quotationHistory.downloadFailed', locale) + '：' + friendlyError(err)); }
   };
 
