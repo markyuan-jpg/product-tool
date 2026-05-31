@@ -128,6 +128,7 @@ PRODUCT_SKIP_WORDS = ['条款', '备注', '说明', '合计', 'total', 'subtotal
                       '系统价格', '零售价', '批发价',
                       '不含税', '含税价',
                       '偏远地区',
+                      'total amount', 'grand total', '总计金额', '合计金额',
                       ]
 
 

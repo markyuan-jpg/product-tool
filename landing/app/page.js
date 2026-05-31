@@ -100,14 +100,14 @@ export default function Home() {
           if (dlR.ok) {
             const blob = await dlR.blob();
             const url = URL.createObjectURL(blob);
-            const a = document.createElement('a'); a.href = url; a.download = data.name || '报价单_' + Date.now() + '.xlsx'; a.click();
+            const a = document.createElement('a'); a.href = url; a.download = data.name || '报价单_' + Date.now() + '.xlsx'; document.body.appendChild(a); a.click(); document.body.removeChild(a);
             URL.revokeObjectURL(url);
           }
         }
       } else {
         const blob = await r.blob();
         const url = URL.createObjectURL(blob);
-        const a = document.createElement('a'); a.href = url; a.download = '报价单_' + Date.now() + '.xlsx'; a.click();
+        const a = document.createElement('a'); a.href = url; a.download = '报价单_' + Date.now() + '.xlsx'; document.body.appendChild(a); a.click(); document.body.removeChild(a);
         URL.revokeObjectURL(url);
       }
     } catch (err) { alert('生成报价单失败：' + friendlyError(err)); }

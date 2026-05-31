@@ -65,24 +65,40 @@ def _filter_non_product_rows(df):
     mask = pd.Series(True, index=df.index)
     for idx, row in df.iterrows():
         m = str(row.get('model', '')).strip()
-        if not m:
+        # 同时检查 name_zh 和 spec_zh（model 可能是占位符 产品_R{n}，真正内容在别的列）
+        name = str(row.get('name_zh', '')).strip()
+        spec = str(row.get('spec_zh', '')).strip()
+        combined = ' '.join(filter(None, [m, name, spec]))
+        if not combined:
             mask.at[idx] = False
             continue
 
         # Normalize non-breaking spaces
+        combined = combined.replace('\xa0', ' ')
         m_norm = m.replace('\xa0', ' ')
 
+        # 检查 model 列
+        hit = False
         for pat in _NON_PRODUCT_MODEL_PATTERNS:
             if pat.search(m_norm):
-                mask.at[idx] = False
+                hit = True
                 break
 
-        if not mask.at[idx]:
+        # 如果 model 列没命中但 name/spec 命中了，也过滤（model 可能是占位符）
+        if not hit and (name or spec):
+            combined_norm = combined.lower()
+            for pat in _NON_PRODUCT_MODEL_PATTERNS:
+                if pat.search(combined_norm):
+                    hit = True
+                    break
+
+        if hit:
+            mask.at[idx] = False
             continue
 
-        # Chinese sentence check (not a product)
-        chinese_chars = len(re.findall(r'[\u4e00-\u9fff]', m))
-        if chinese_chars > 8 and len(m) > 12:
+        # Chinese sentence check (not a product) — on combined content
+        chinese_chars = len(re.findall(r'[\u4e00-\u9fff]', combined))
+        if chinese_chars > 8 and len(combined) > 12:
             mask.at[idx] = False
 
     return df[mask]
@@ -582,9 +598,11 @@ def _is_product_row(first_cell: str, qty_val, price_val) -> bool:
         # Chinese contract clauses
         re.compile(r'^(卖方|买方|供应商|客户|收货人|通知方|承运人)', re.I),
         # Numbered clauses in contracts
-        re.compile(r'^\d+[.、\s]\s*(transshipment|payment|delivery|packing|insurance|bank|inspection|arbitration|force\s*majeure|shipping|terms?|conditions?|warranty|validity|quality)', re.I),
+        re.compile(r'^\d+[.、\s]\s*(transshipment|payment|delivery|packing|insurance|bank|inspection|arbitration|force\s*majeure|shipping|terms?|conditions?|warranty|validity|quality|port|brand|motorcycle|e[\-\s]?bike|destination|notice|handling)', re.I),
         # Pure clause text lines
         re.compile(r'^(仲裁|保险|商检|产地|原产|信用证|l/?c|t/?t|不可抗力)', re.I),
+        # Total/subtotal amounts (misidentified as products when they have prices)
+        re.compile(r'^(total\s+amount|total\s+payment|grand\s+total|总计金额|合计金额|total\s*[:：])', re.I),
         # Signature / approval lines
         re.compile(r'^(sign(ed|ature)?|approv(ed|al)?|authoriz(ed|ation)?|seal|stamp|公章|签字|签名|盖章|审批)', re.I),
         # Packing list headers misidentified as products
@@ -625,7 +643,8 @@ def _is_product_row(first_cell: str, qty_val, price_val) -> bool:
                  '小计', '汇总', '总计', '报关', '合同', 'header',
                  'warranty', 'oem', 'validity', 'payment',
                  '包邮', '执行', '经销价', '件以下', '件起', '非偏远',
-                 '系统价格', '零售价', '批发价', '不含税', '含税价']
+                 '系统价格', '零售价', '批发价', '不含税', '含税价',
+                 'grand total', 'total amount', '总计金额', '合计金额']
     if any(kw in fc_lower for kw in _skip):
         return False
     # ─── 定价条款预检（数字起头 + 以下/以上/包邮 → 非产品） ───
@@ -777,9 +796,14 @@ def _classify_columns_by_content(ws, header_row: int) -> dict:
                 continue
             col_scores[c]['total'] += 1
             vl = val.lower()
-            # 型号检测：字母开头+至少2位数字，长度<30，不含中文/单位
-            if (re.search(r'^[A-Za-z]+[-]?\d{2,}$', val) and len(val) < 30
-                    and not re.search(r'[\u4e00-\u9fff]|cm|mm|kg|inch|volt|amp|watt|hz|rpm|pcs|set|unit', val.lower())):
+            # 型号检测：与 is_model_code() 一致 — 字母数字混合、无中文/单位、长度≤30
+            _units_re = re.compile(r'cm|mm|kg|inch|volt|amp|watt|hz|rpm|pcs|set|unit|piece|pack|carton|ctn|box|bag|bottle|dozen', re.I)
+            if (re.match(r'^[A-Za-z0-9][A-Za-z0-9\-_\.\/\+]+$', val)
+                    and not re.search(r'[\u4e00-\u9fff]', val)
+                    and not str(val).isdigit()
+                    and not _units_re.search(val.lower())
+                    and len(val) < 30
+                    and len(val) >= 2):
                 col_scores[c]['model'] += 2
             price_m = re.search(r'[\d,]+(?:\.\d+)?', val)
             if price_m:

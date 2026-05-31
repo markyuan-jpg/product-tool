@@ -2,6 +2,7 @@
 
 import os, sys, json, re, logging
 import asyncio
+import functools
 import sqlite3
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -1218,17 +1219,17 @@ async def parse_file(
 
             raise HTTPException(400, "文件中未找到产品数据")
 
-        # 统一图片匹配：选赢家后只做一次
+        # 统一图片匹配：选赢家后只做一次（放入线程池避免阻塞事件循环）
         if ext in ('.xlsx', '.xls') and '_row' in df.columns:
             try:
                 from src.core.image import match_images_to_products as _match_img
-                df = _match_img(df, str(save_path))
+                df = await loop.run_in_executor(None, _match_img, df, str(save_path))
             except Exception:
                 pass
         elif ext == '.docx' and '_row' in df.columns:
             try:
                 from src.core.image import match_images_to_products_docx as _match_docx
-                df = _match_docx(df, str(save_path))
+                df = await loop.run_in_executor(None, _match_docx, df, str(save_path))
             except Exception:
                 pass
         # PDF 图片匹配已在 pdf_parser.py 内部完成
@@ -1583,8 +1584,19 @@ async def generate_quotation(
 
 
     try:
-
-        create_quotation(items, str(output_path), lang=lang, with_images=(with_images == "1"), company_info=company_info if company_info else None, payment_terms=payment_terms, currency=currency) 
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(
+            None,
+            functools.partial(
+                create_quotation,
+                items, str(output_path),
+                lang=lang,
+                with_images=(with_images == "1"),
+                company_info=company_info if company_info else None,
+                payment_terms=payment_terms,
+                currency=currency,
+            ),
+        )
 
     except Exception as e:
 

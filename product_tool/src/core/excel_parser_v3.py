@@ -1002,8 +1002,8 @@ def parse_excel_v3(file_path: str, wb=None) -> Optional[pd.DataFrame]:
             re.compile(r'^(contract|seller|buyer|payment|shipping|delivery|transshipment|remarks?|note|terms|conditions?|address|tel[.:\\s]|fax[.:\\s]|email|phone|website|bank|account|beneficiary|swift|contact|signature|date|invoice|validity|description)', re.I),
             re.compile(r'^(合同|卖方|买方|付款|交货|运输|包装|条款|备注|说明|地址|电话|邮箱|日期|受益|银行|账户|签名|签字|合计|总计|金额|小计|编号|序号)', re.I),
             re.compile(r'^(company|supplier|customer|buyer|seller)(\s|$)', re.I),
-            re.compile(r'^(total\s+amount|total\s+payment|grand\s+total|sub\s*total)', re.I),
-            re.compile(r'^(PO|SO|CO|DO|WO|IV|INV|CT|CN|QT|RFQ|PI|DN|GRN)[\d\-]{8,20}$'),  # 文档编号
+            re.compile(r'^(total\s+amount|total\s+payment|grand\s+total|sub\s*total|total\s*[:：]|总计金额|合计金额)', re.I),
+            re.compile(r'^(PO|SO|CO|DO|WO|IV|INV|CT|CN|QT|RFQ|PI|DN|GRN)[\d\-]{8,20}$'),
             re.compile(r'^(contract\s*no|order\s*no|po\s*no|invoice\s*no|ref\s*no|payment\s*no|shipment\s*no|delivery\s*no|doc\s*no|quotation\s*no|quote\s*no)\s*[:\-.]?\s*[\w\-]+', re.I),
             re.compile(r'^(packing\s*(list|detail|info)|装箱(单|明细|清单)|notify\s+party|consignee|carrier|forwarder|agent)', re.I),
             re.compile(r'^(test\s+report|inspection\s+report|certificate\s+of)', re.I),
@@ -1011,21 +1011,35 @@ def parse_excel_v3(file_path: str, wb=None) -> Optional[pd.DataFrame]:
             re.compile(r'^(country\s+of\s+origin|made\s+in|原产地|manufacturer)', re.I),
             re.compile(r'^(仲裁|保险|商检|产地证|原产地|信用证|l/?c|t/?t|不可抗力)', re.I),
             re.compile(r'^(\u00a5|\$|eur|usd|cny)\s*[\d,]+', re.I),
+            re.compile(r'^\d+[.、\s]\s*(transshipment|payment|delivery|packing|insurance|bank|inspection|arbitration|force\s*majeure|shipping|terms?|conditions?|warranty|validity|quality|port|brand|motorcycle|e[\-\s]?bike|destination|notice|handling)', re.I),
+            re.compile(r'^(sign(ed|ature)?|approv(ed|al)?|authoriz(ed|ation)?|seal|stamp|公章|签字|签名|盖章|审批)', re.I),
         ]
         keep = pd.Series(True, index=df.index)
         for i, row in df.iterrows():
             m = str(row.get('model', '')).strip()
-            if not m:
+            name = str(row.get('name_zh', '')).strip()
+            spec = str(row.get('spec_zh', '')).strip()
+            combined = ' '.join(filter(None, [m, name, spec]))
+            if not combined:
                 keep.at[i] = False
                 continue
+            hit = False
             for pat in _bad_pats:
                 if pat.search(m):
-                    keep.at[i] = False
+                    hit = True
                     break
-            if keep.at[i]:
-                ch = len(re.findall(r'[\u4e00-\u9fff]', m))
-                if ch > 8 and len(m) > 12:
-                    keep.at[i] = False
+            # 如果 model 没命中，检查 combined（model 可能是占位符 产品_R{n}）
+            if not hit and (name or spec):
+                for pat in _bad_pats:
+                    if pat.search(combined.lower()):
+                        hit = True
+                        break
+            if hit:
+                keep.at[i] = False
+                continue
+            ch = len(re.findall(r'[\u4e00-\u9fff]', combined))
+            if ch > 8 and len(combined) > 12:
+                keep.at[i] = False
         df = df[keep]
     return df
 

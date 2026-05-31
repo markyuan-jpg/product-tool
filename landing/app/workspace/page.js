@@ -563,7 +563,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
       } else {
         const blob = await r.blob();
         const dlUrl = URL.createObjectURL(blob);
-        const a = document.createElement('a'); a.href = dlUrl; a.download = filename; a.click();
+        const a = document.createElement('a'); a.href = dlUrl; a.download = filename; document.body.appendChild(a); a.click(); document.body.removeChild(a);
         setTimeout(() => URL.revokeObjectURL(dlUrl), 5000);
       }
       fetchProducts();
