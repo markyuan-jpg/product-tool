@@ -20,7 +20,6 @@ export default function Home() {
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState(null);
   const [generating, setGenerating] = useState(false);
-  const [isMergeExport, setIsMergeExport] = useState(false);
   const [showCompanyPanel, setShowCompanyPanel] = useState(false);
   const [companyName, setCompanyName] = useState('');
   const [companyContact, setCompanyContact] = useState('');
@@ -29,15 +28,17 @@ export default function Home() {
   const [authUser, setAuthUser] = useState(null);
   const [failedImages, setFailedImages] = useState(new Set());
   const [fileEntries, setFileEntries] = useState([]);
-  const [activeFileIdx, setActiveFileIdx] = useState(-1);
+  const [checkedFiles, setCheckedFiles] = useState(new Set());
   const MAX_FREE_FILES = 3;
   const uploadLocked = fileEntries.length >= MAX_FREE_FILES;
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
   const processingRef = useRef(false);
-  const activeProducts = activeFileIdx >= 0 && activeFileIdx < fileEntries.length
-    ? fileEntries[activeFileIdx].products : [];
-  const totalProducts = fileEntries.flatMap(e => e.products || []);
+  const activeProducts = fileEntries.reduce((arr, entry, idx) => {
+    if (checkedFiles.has(idx)) arr.push(...(entry.products || []));
+    return arr;
+  }, []);
+  const allChecked = fileEntries.length > 0 && checkedFiles.size === fileEntries.length;
 
   useEffect(() => { if (isLoggedIn()) setAuthUser(getStoredUser()); }, []);
 
@@ -68,22 +69,32 @@ export default function Home() {
       if (!res.ok) { const e = await res.json().catch(() => ({ detail: '解析失败' })); throw new Error(e.detail || '服务器错误 ' + res.status); }
       const data = await res.json();
       setFileEntries(prev => [...prev, { name: file.name, products: data.products || [], dedupCount: data.dedup || null }]);
-      setActiveFileIdx(prev => prev === -1 ? 0 : prev);
+      setCheckedFiles(prev => { const next = new Set(prev); next.add(prev.size); return next; });
       setParsing(false);
     } catch (err) { setParseError(friendlyError(err)); setParsing(false); }
     processingRef.current = false;
   };
 
-  const switchFile = (idx) => { setActiveFileIdx(idx); setFailedImages(new Set()); };
-  const handleGenerateQuotation = () => { if (activeProducts.length > 0) { setIsMergeExport(false); setShowCompanyPanel(true); } };
-  const handleMergeExport = () => { if (totalProducts.length > 0) { setIsMergeExport(true); setShowCompanyPanel(true); } };
+  const toggleFile = (idx) => {
+    setCheckedFiles(prev => {
+      if (prev.has(idx) && prev.size <= 1) return prev;
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx); else next.add(idx);
+      return next;
+    });
+    setFailedImages(new Set());
+  };
+  const toggleAll = () => {
+    setCheckedFiles(allChecked ? new Set([0]) : new Set(fileEntries.map((_, i) => i)));
+    setFailedImages(new Set());
+  };
+  const handleGenerateQuotation = () => { if (activeProducts.length > 0) setShowCompanyPanel(true); };
 
-  const confirmQuotation = async (productsOverride) => {
-    const products = productsOverride || (isMergeExport ? totalProducts : activeProducts);
+  const confirmQuotation = async () => {
     setShowCompanyPanel(false); setGenerating(true);
     try {
       const b = new URLSearchParams();
-      b.append('products', JSON.stringify(products));
+      b.append('products', JSON.stringify(activeProducts));
       b.append('lang', 'bilingual');
       if (companyName) b.append('company_name', companyName);
       if (companyContact) b.append('company_contact', companyContact);
@@ -188,42 +199,34 @@ export default function Home() {
         {/* After-upload panels */}
         {fileEntries.length > 0 && (
           <div className="space-y-6">
-            {/* File tabs */}
+            {/* File tabs with multi-select */}
             <div className="flex items-center gap-2 overflow-x-auto thin-scroll">
               {fileEntries.map((entry, idx) => (
-                <button key={idx} onClick={() => switchFile(idx)} className={'file-tab ' + (idx === activeFileIdx ? 'active' : '')}>{entry.name}</button>
+                <label key={idx} className={'file-tab cursor-pointer ' + (checkedFiles.has(idx) ? 'active' : '')}>
+                  <input type="checkbox" checked={checkedFiles.has(idx)} onChange={() => toggleFile(idx)} className="mr-1.5" />
+                  {entry.name} <span className="text-xs opacity-60 ml-1">({(entry.products || []).length})</span>
+                </label>
               ))}
+              {fileEntries.length > 1 && (
+                <label className="file-tab-add cursor-pointer">
+                  <input type="checkbox" checked={allChecked} onChange={toggleAll} className="mr-1" />
+                  {t('home.selectAll', locale)}
+                </label>
+              )}
               {!uploadLocked && <button onClick={handleAddFileClick} className="file-tab-add" title={t('home.addFile', locale)}>+</button>}
               <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.pdf,.docx" onChange={handleAddFileSelect} className="hidden" />
             </div>
 
             {/* Count + CTA */}
-            {totalProducts.length > 0 && (
+            {activeProducts.length > 0 && (
               <div className="flex items-center justify-between gap-2">
-                {activeProducts.length > 0 ? (
-                  <>
-                    <p className="text-sm font-medium text-[var(--navy)]">{t('home.productsFound', locale).replace('{count}', activeProducts.length).replace('{dedup}', fileEntries[activeFileIdx]?.dedupCount ? t('home.dedupSuffix', locale) : '')}</p>
-                    <div className="flex gap-2">
-                      <button onClick={handleGenerateQuotation} disabled={generating}
-                        className="px-4 py-2 rounded-lg bg-[var(--gold)] text-white text-sm font-medium hover:bg-[var(--gold)]/90 disabled:opacity-50 cursor-pointer">
-                        {generating && !isMergeExport ? t('home.generating', locale) : t('home.generateQuote', locale)}
-                      </button>
-                      {fileEntries.length > 1 && (
-                        <button onClick={handleMergeExport} disabled={generating}
-                          className="px-4 py-2 rounded-lg bg-[var(--navy)] text-white text-sm font-medium hover:opacity-90 disabled:opacity-50 cursor-pointer">
-                          {generating && isMergeExport ? t('home.generating', locale) : t('home.mergeExport', locale)}
-                        </button>
-                      )}
-                    </div>
-                  </>
-                ) : (
-                  <div className="flex-1 flex justify-end">
-                    <button onClick={handleMergeExport} disabled={generating}
-                      className="px-4 py-2 rounded-lg bg-[var(--navy)] text-white text-sm font-medium hover:opacity-90 disabled:opacity-50 cursor-pointer">
-                      {t('home.mergeExport', locale)} ({totalProducts.length})
-                    </button>
-                  </div>
-                )}
+                <p className="text-sm font-medium text-[var(--navy)]">
+                  {checkedFiles.size > 1 ? `${checkedFiles.size} ${t('home.filesSelected', locale)} · ` : ''}{activeProducts.length} {t('home.productsTotal', locale)}
+                </p>
+                <button onClick={handleGenerateQuotation} disabled={generating}
+                  className="px-4 py-2 rounded-lg bg-[var(--gold)] text-white text-sm font-medium hover:bg-[var(--gold)]/90 disabled:opacity-50 cursor-pointer">
+                  {generating ? t('home.generating', locale) : t('home.generateQuote', locale)}
+                </button>
               </div>
             )}
 
@@ -238,12 +241,19 @@ export default function Home() {
                   {activeProducts.length > 0 ? (
                     <div className="max-h-64 overflow-auto thin-scroll">
                       <table className="prod-table">
-                        <thead><tr><th>{t('home.model', locale)}</th><th>{t('home.name', locale)}</th><th>{t('home.spec', locale)}</th><th>{t('home.price', locale)}</th></tr></thead>
+                        <thead><tr><th></th><th>{t('home.model', locale)}</th><th>{t('home.name', locale)}</th><th>{t('home.spec', locale)}</th><th>{t('home.price', locale)}</th></tr></thead>
                         <tbody>{activeProducts.slice(0, 50).map((p, i) => (
-                          <tr key={i}><td className="font-mono text-[0.75rem] max-w-[100px] overflow-hidden text-ellipsis whitespace-nowrap" title={p.model}>{p.model || '-'}</td>
-                          <td className="max-w-[140px] overflow-hidden text-ellipsis whitespace-nowrap" title={p.name_zh || p.name_en}>{p.name_zh || p.name_en || '-'}</td>
-                          <td className="max-w-[160px] overflow-hidden text-ellipsis whitespace-nowrap" title={p.spec_zh || p.spec_en}>{p.spec_zh || p.spec_en || '-'}</td>
-                          <td className="font-medium">{p.currency === 'USD' ? '$' : '¥'}{p.price_rmb || '-'}</td></tr>
+                          <tr key={i}>
+                            <td className="w-10 h-10 p-1">
+                              {p._image_path && !failedImages.has(i) ? (
+                                <img src={API_BASE + '/api/images/?path=' + encodeURIComponent(p._image_path)} alt="" className="w-8 h-8 object-cover rounded"
+                                  loading="lazy" onError={() => setFailedImages(prev => { const n = new Set(prev); n.add(i); return n; })} />
+                              ) : <span className="text-xs text-gray-300">—</span>}
+                            </td>
+                            <td className="font-mono text-[0.75rem] max-w-[100px] overflow-hidden text-ellipsis whitespace-nowrap" title={p.model}>{p.model || '-'}</td>
+                            <td className="max-w-[140px] overflow-hidden text-ellipsis whitespace-nowrap" title={p.name_zh || p.name_en}>{p.name_zh || p.name_en || '-'}</td>
+                            <td className="max-w-[160px] overflow-hidden text-ellipsis whitespace-nowrap" title={p.spec_zh || p.spec_en}>{p.spec_zh || p.spec_en || '-'}</td>
+                            <td className="font-medium">{p.currency === 'USD' ? '$' : '¥'}{p.price_rmb || '-'}</td></tr>
                         ))}</tbody>
                       </table>
                     </div>
