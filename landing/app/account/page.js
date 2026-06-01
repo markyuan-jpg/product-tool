@@ -70,17 +70,15 @@ export default function AccountPage() {
       } catch(e) {}
     });
     try {
-      const res = await fetch(`${API_BASE}/api/bank/load`, {
+      fetch(`${API_BASE}/api/bank/load`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
-      });
-      if (res.ok) {
-        const stored = await res.json();
+      }).then(r => r.json()).then(stored => {
         if (stored.beneficiary) setBankBeneficiary(stored.beneficiary);
         if (stored.bank_name) setBankName(stored.bank_name);
         if (stored.bank_address) setBankAddress(stored.bank_address);
         if (stored.account_no) setBankAccount(stored.account_no);
         if (stored.swift_code) setBankSwift(stored.swift_code);
-      }
+      }).catch(() => {});
     } catch (e) {}
   }, [router]);
 
