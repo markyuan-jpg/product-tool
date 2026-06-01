@@ -447,20 +447,10 @@ class QuotationExcel:
         
 
         if df.empty:
-
-            # 
-
             wb = Workbook()
-
             wb.active.title = 'Quotation'
-        wb.save(output_path)
-
-        # Clean up temp files from image resize
-        for _tf in _temp_files:
-            try: os.unlink(_tf)
-            except OSError: pass
-
-        return output_path
+            wb.save(output_path)
+            return output_path
 
         
 
@@ -1141,7 +1131,10 @@ class QuotationExcel:
 
         wb.save(output_path)
 
-        
+        # Clean up temp files from image resize
+        for _tf in _temp_files:
+            try: os.unlink(_tf)
+            except OSError: pass
 
         return output_path
 
