@@ -1130,7 +1130,7 @@ async def parse_file(
 
     file: UploadFile = File(...),
 
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_session)):
 
     ext = Path(file.filename).suffix.lower()
@@ -1140,10 +1140,11 @@ async def parse_file(
         raise HTTPException(400, f"不支持的文件格式:{ext},仅支持 Excel/PDF/Word")
 
 
-    # Free user upload limit check
-    from auth import check_upload_limit
-    if not await check_upload_limit(user, db):
-        raise HTTPException(403, "Free users limited to 20 uploads/month. Upgrade Pro to remove limit.")
+    # Free user upload limit check (only for logged-in users)
+    if user:
+        from auth import check_upload_limit
+        if not await check_upload_limit(user, db):
+            raise HTTPException(403, "Free users limited to 20 uploads/month. Upgrade Pro to remove limit.")
 
 
     ts = datetime.now().strftime("%Y%m%d%H%M%S")
@@ -1287,9 +1288,10 @@ async def parse_file(
 
         
 
-        # 上传成功计数
-        from auth import increment_upload
-        await increment_upload(user, db)
+        # 上传成功计数（仅登录用户）
+        if user:
+            from auth import increment_upload
+            await increment_upload(user, db)
 
         
 
@@ -1551,7 +1553,7 @@ async def generate_quotation(
 
     db: AsyncSession = Depends(get_session),
 
-    user: User = Depends(get_current_user)):
+    authorization: str = Header(None)):
 
     
     import pandas as pd
@@ -1648,13 +1650,15 @@ async def generate_quotation(
         logger.error("报价单生成失败: %s", e, exc_info=True)
         raise HTTPException(500, f"报价单生成失败: {e}")
 
-    # Auto-save to quotation history
-    quotation_id = None 
-    try: 
-        from product_repo import save_quotation
-        uid = user.id
-        fname = f"报价单_{ts}.xlsx"
-        quotation_id = save_quotation(uid, json.dumps(items), fname, str(output_path))
+    # Auto-save to quotation history if user is logged in
+    quotation_id = None
+    user = await get_current_user_optional(authorization, db)
+    if user:
+        try: 
+            from product_repo import save_quotation
+            uid = user.id
+            fname = f"报价单_{ts}.xlsx"
+            quotation_id = save_quotation(uid, json.dumps(items), fname, str(output_path))
 
     except Exception as e: 
 
@@ -1746,7 +1750,7 @@ async def generate_quotation_pdf(
 
     db: AsyncSession = Depends(get_session),
 
-    user: User = Depends(get_current_user)):
+    authorization: str = Header(None)):
 
     items = json.loads(products)
 
