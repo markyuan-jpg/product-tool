@@ -41,7 +41,10 @@ def resize_image(path: str, max_w: int = MAX_IMAGE_WIDTH, quality: int = JPEG_QU
     global _resize_cache
     key = (path, max_w, quality)
     if key in _resize_cache:
-        return _resize_cache[key]
+        cached = _resize_cache[key]
+        if hasattr(cached, 'seek'):
+            cached.seek(0)
+        return cached
     """压缩大图到指定宽度，保留原格式。宽 <= max_w 的图片原样返回。
     
     Args:

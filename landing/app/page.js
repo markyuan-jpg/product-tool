@@ -198,21 +198,32 @@ export default function Home() {
             </div>
 
             {/* Count + CTA */}
-            {activeProducts.length > 0 && (
+            {totalProducts.length > 0 && (
               <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-medium text-[var(--navy)]">{t('home.productsFound', locale).replace('{count}', activeProducts.length).replace('{dedup}', fileEntries[activeFileIdx]?.dedupCount ? t('home.dedupSuffix', locale) : '')}</p>
-                <div className="flex gap-2">
-                  <button onClick={handleGenerateQuotation} disabled={generating}
-                    className="px-4 py-2 rounded-lg bg-[var(--gold)] text-white text-sm font-medium hover:bg-[var(--gold)]/90 disabled:opacity-50 cursor-pointer">
-                    {generating && !isMergeExport ? t('home.generating', locale) : t('home.generateQuote', locale)}
-                  </button>
-                  {fileEntries.length > 1 && totalProducts.length > 0 && (
+                {activeProducts.length > 0 ? (
+                  <>
+                    <p className="text-sm font-medium text-[var(--navy)]">{t('home.productsFound', locale).replace('{count}', activeProducts.length).replace('{dedup}', fileEntries[activeFileIdx]?.dedupCount ? t('home.dedupSuffix', locale) : '')}</p>
+                    <div className="flex gap-2">
+                      <button onClick={handleGenerateQuotation} disabled={generating}
+                        className="px-4 py-2 rounded-lg bg-[var(--gold)] text-white text-sm font-medium hover:bg-[var(--gold)]/90 disabled:opacity-50 cursor-pointer">
+                        {generating && !isMergeExport ? t('home.generating', locale) : t('home.generateQuote', locale)}
+                      </button>
+                      {fileEntries.length > 1 && (
+                        <button onClick={handleMergeExport} disabled={generating}
+                          className="px-4 py-2 rounded-lg bg-[var(--navy)] text-white text-sm font-medium hover:opacity-90 disabled:opacity-50 cursor-pointer">
+                          {generating && isMergeExport ? t('home.generating', locale) : t('home.mergeExport', locale)}
+                        </button>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex-1 flex justify-end">
                     <button onClick={handleMergeExport} disabled={generating}
                       className="px-4 py-2 rounded-lg bg-[var(--navy)] text-white text-sm font-medium hover:opacity-90 disabled:opacity-50 cursor-pointer">
-                      {generating && isMergeExport ? t('home.generating', locale) : t('home.mergeExport', locale)}
+                      {t('home.mergeExport', locale)} ({totalProducts.length})
                     </button>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             )}
 

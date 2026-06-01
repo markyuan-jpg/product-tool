@@ -1619,6 +1619,24 @@ async def generate_quotation(
 
     output_path = OUTPUT_DIR / f"quotation_{ts}.xlsx" 
 
+    # 图片预热：提前 resize 所有图片，避免生成阶段逐张 PIL 解码大图
+    _resize_temp_files = []
+    if with_images == "1":
+        try:
+            from src.core.image import resize_image as _pre_resize
+            for item in items:
+                img_p = item.get('_image_path') or item.get('image_path', '')
+                if img_p and os.path.exists(img_p):
+                    resized = _pre_resize(img_p)
+                    if hasattr(resized, 'read'):
+                        import tempfile as _tf
+                        _tmp = _tf.NamedTemporaryFile(suffix='.jpg', delete=False)
+                        _tmp.write(resized.read())
+                        _tmp.close()
+                        item['_image_path'] = _tmp.name
+                        _resize_temp_files.append(_tmp.name)
+        except Exception:
+            pass
 
     try:
         loop = asyncio.get_event_loop()
@@ -1649,6 +1667,11 @@ async def generate_quotation(
 
         logger.error("报价单生成失败: %s", e, exc_info=True)
         raise HTTPException(500, f"报价单生成失败: {e}")
+    finally:
+        # Clean up pre-resized temp files
+        for _tf in _resize_temp_files:
+            try: os.unlink(_tf)
+            except OSError: pass
 
     # Auto-save to quotation history if user is logged in
     quotation_id = None
