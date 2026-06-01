@@ -453,7 +453,6 @@ class QuotationExcel:
             wb = Workbook()
 
             wb.active.title = 'Quotation'
-
         wb.save(output_path)
 
         # Clean up temp files from image resize
@@ -461,7 +460,7 @@ class QuotationExcel:
             try: os.unlink(_tf)
             except OSError: pass
 
-            return output_path
+        return output_path
 
         
 
