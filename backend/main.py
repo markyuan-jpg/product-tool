@@ -1660,9 +1660,8 @@ async def generate_quotation(
             fname = f"报价单_{ts}.xlsx"
             quotation_id = save_quotation(uid, json.dumps(items), fname, str(output_path))
 
-    except Exception as e: 
-
-        logger.warning("报价auto-save 失败: %s", e) 
+        except Exception as e: 
+            logger.warning("报价auto-save 失败: %s", e)
 
 
     if quotation_id:
@@ -1771,17 +1770,14 @@ async def generate_quotation_pdf(
         raise HTTPException(500, "PDF 报价单生成失败")
 
     pdf_qid = None
-    try:
-
-        if user:
-
+    user = await get_current_user_optional(authorization, db)
+    if user:
+        try:
             from product_repo import save_quotation
             pdf_qid = save_quotation(user.id, json.dumps(items),
                 f"报价单PDF_{ts}.pdf", str(output_path))
-
-    except Exception as e:
-
-        logger.warning("PDF报价auto-save 失败: %s", e)
+        except Exception as e:
+            logger.warning("PDF报价auto-save 失败: %s", e)
 
     if pdf_qid:
         return {"status": "ok", "id": pdf_qid, "name": f"报价单PDF_{ts}.pdf"}
