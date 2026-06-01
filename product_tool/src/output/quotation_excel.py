@@ -759,13 +759,9 @@ class QuotationExcel:
 
                     IMG_W, IMG_H = 100, 80
 
-                    # resize_image 返回的 BytesIO 会被提前关闭，所以始终传路径
-                    # 让 openpyxl 自己管理文件句柄
-                    _resized_path = resize_image(img_path)
-                    _final_path = img_path
-                    if isinstance(_resized_path, str) and os.path.isfile(_resized_path):
-                        _final_path = _resized_path
-                    img = XLImage(_final_path)
+                    # resize_image 返回 BytesIO（已压缩）或原始路径（无需压缩）
+                    _resized = resize_image(img_path)
+                    img = XLImage(_resized if hasattr(_resized, 'read') else img_path)
 
                     img.width = IMG_W; img.height = IMG_H
 
