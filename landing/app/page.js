@@ -20,6 +20,7 @@ export default function Home() {
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState(null);
   const [generating, setGenerating] = useState(false);
+  const [isMergeExport, setIsMergeExport] = useState(false);
   const [showCompanyPanel, setShowCompanyPanel] = useState(false);
   const [companyName, setCompanyName] = useState('');
   const [companyContact, setCompanyContact] = useState('');
@@ -36,6 +37,7 @@ export default function Home() {
   const processingRef = useRef(false);
   const activeProducts = activeFileIdx >= 0 && activeFileIdx < fileEntries.length
     ? fileEntries[activeFileIdx].products : [];
+  const totalProducts = fileEntries.flatMap(e => e.products || []);
 
   useEffect(() => { if (isLoggedIn()) setAuthUser(getStoredUser()); }, []);
 
@@ -73,13 +75,15 @@ export default function Home() {
   };
 
   const switchFile = (idx) => { setActiveFileIdx(idx); setFailedImages(new Set()); };
-  const handleGenerateQuotation = () => { if (activeProducts.length > 0) setShowCompanyPanel(true); };
+  const handleGenerateQuotation = () => { if (activeProducts.length > 0) { setIsMergeExport(false); setShowCompanyPanel(true); } };
+  const handleMergeExport = () => { if (totalProducts.length > 0) { setIsMergeExport(true); setShowCompanyPanel(true); } };
 
-  const confirmQuotation = async () => {
+  const confirmQuotation = async (productsOverride) => {
+    const products = productsOverride || (isMergeExport ? totalProducts : activeProducts);
     setShowCompanyPanel(false); setGenerating(true);
     try {
       const b = new URLSearchParams();
-      b.append('products', JSON.stringify(activeProducts));
+      b.append('products', JSON.stringify(products));
       b.append('lang', 'bilingual');
       if (companyName) b.append('company_name', companyName);
       if (companyContact) b.append('company_contact', companyContact);
@@ -195,12 +199,20 @@ export default function Home() {
 
             {/* Count + CTA */}
             {activeProducts.length > 0 && (
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <p className="text-sm font-medium text-[var(--navy)]">{t('home.productsFound', locale).replace('{count}', activeProducts.length).replace('{dedup}', fileEntries[activeFileIdx]?.dedupCount ? t('home.dedupSuffix', locale) : '')}</p>
-                <button onClick={handleGenerateQuotation} disabled={generating}
-                  className="px-5 py-2 rounded-lg bg-[var(--gold)] text-white text-sm font-medium hover:bg-[var(--gold)]/90 disabled:opacity-50 cursor-pointer">
-                  {generating ? t('home.generating', locale) : t('home.generateQuote', locale)}
-                </button>
+                <div className="flex gap-2">
+                  <button onClick={handleGenerateQuotation} disabled={generating}
+                    className="px-4 py-2 rounded-lg bg-[var(--gold)] text-white text-sm font-medium hover:bg-[var(--gold)]/90 disabled:opacity-50 cursor-pointer">
+                    {generating && !isMergeExport ? t('home.generating', locale) : t('home.generateQuote', locale)}
+                  </button>
+                  {fileEntries.length > 1 && totalProducts.length > 0 && (
+                    <button onClick={handleMergeExport} disabled={generating}
+                      className="px-4 py-2 rounded-lg bg-[var(--navy)] text-white text-sm font-medium hover:opacity-90 disabled:opacity-50 cursor-pointer">
+                      {generating && isMergeExport ? t('home.generating', locale) : t('home.mergeExport', locale)}
+                    </button>
+                  )}
+                </div>
               </div>
             )}
 
