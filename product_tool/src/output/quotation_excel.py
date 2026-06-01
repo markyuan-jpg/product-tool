@@ -7,14 +7,11 @@ Quotation Excel generator
 """
 
 import os
-
 import re
-
 import glob as g
-
 import logging
-
 import warnings
+import tempfile
 
 import pandas as pd
 
@@ -457,7 +454,12 @@ class QuotationExcel:
 
             wb.active.title = 'Quotation'
 
-            wb.save(output_path)
+        wb.save(output_path)
+
+        # Clean up temp files from image resize
+        for _tf in _temp_files:
+            try: os.unlink(_tf)
+            except OSError: pass
 
             return output_path
 
@@ -658,7 +660,7 @@ class QuotationExcel:
         data_start_row = row
 
         total_amount = 0
-
+        _temp_files = []
         for idx, (_, record) in enumerate(df.iterrows()):
 
             model = record.get('model', '')
@@ -760,8 +762,17 @@ class QuotationExcel:
                     IMG_W, IMG_H = 100, 80
 
                     # resize_image 返回 BytesIO（已压缩）或原始路径（无需压缩）
+                    # openpyxl 延迟读取图片，BytesIO 可能已关闭，写临时文件保活
                     _resized = resize_image(img_path)
-                    img = XLImage(_resized if hasattr(_resized, 'read') else img_path)
+                    if hasattr(_resized, 'read'):
+                        _tmp = tempfile.NamedTemporaryFile(suffix='.jpg', delete=False)
+                        _tmp.write(_resized.read())
+                        _tmp.close()
+                        _final_path = _tmp.name
+                        _temp_files.append(_final_path)
+                    else:
+                        _final_path = _resized
+                    img = XLImage(_final_path)
 
                     img.width = IMG_W; img.height = IMG_H
 
