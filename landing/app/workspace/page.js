@@ -48,7 +48,7 @@ export default function WorkspacePage() {
         </div>
       )}
       <main className="max-w-6xl mx-auto px-4 py-8 space-y-8">
-        <UploadSection onSaveSuccess={() => setProductRefreshKey(k => k + 1)} />
+        <UploadSection onSaveSuccess={() => setProductRefreshKey(k => k + 1)} user={user} />
         <ProductLibrarySection refreshKey={productRefreshKey} user={user} onQuotationGenerated={() => setQuotationRefreshKey(k => k + 1)} />
         <QuotationHistorySection refreshKey={quotationRefreshKey} />
       </main>
@@ -57,7 +57,7 @@ export default function WorkspacePage() {
   );
 }
 
-function UploadSection({ onSaveSuccess }) {
+function UploadSection({ onSaveSuccess, user }) {
   const { locale } = useLocale();
   const [inputTab, setInputTab2] = useState('file');
   const setInputTab = (tab) => { if (tab === 'smartpaste' && user?.tier !== 'pro') return; setInputTab2(tab); };
