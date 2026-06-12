@@ -135,6 +135,8 @@ def _image_col_matches(anchor_col: int, image_col: Optional[int], tolerance: int
     """判断图片锚点列是否在图片列附近"""
     if image_col is None:
         return True  # 没检测到图片列 → 不过滤
+    if anchor_col is None:
+        return True  # 无法确定锚点列 → 不过滤
     return abs(anchor_col - image_col) <= tolerance
 
 
@@ -169,7 +171,8 @@ def extract_openpyxl_images(file_path: str, image_col: Optional[int] = None) -> 
                     col = None
                     if hasattr(img.anchor, '_from') and hasattr(img.anchor._from, 'row'):
                         row = img.anchor._from.row + 1
-                        col = img.anchor._from.col + 1
+                        if hasattr(img.anchor._from, 'col') and img.anchor._from.col is not None:
+                            col = img.anchor._from.col + 1
                     if row <= 1:
                         continue
                     if not _image_col_matches(col, image_col):
