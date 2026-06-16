@@ -4,9 +4,7 @@
 
 **网址：** [quoteflow.it.com](https://quoteflow.it.com)
 
-> 📖 **完整文档请见 [docs/项目手册.md](docs/项目手册.md)** — 包含架构、部署、解析器、设计系统、安全策略、环境变量等所有内容。
->
-> 🤖 AI 代理请阅读根目录 `CLAUDE.md`。开发者快捷参考见 `AGENTS.md`。
+> 📚 **完整文档导航见 [docs/README.md](docs/README.md)** — 按角色分类，一键跳转到架构、部署、解析器、设计、安全等 15 份详细文档。
 
 ---
 
