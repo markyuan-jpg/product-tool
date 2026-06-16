@@ -2,6 +2,8 @@
 
 Next.js 16 App Router 前端 — 产品报价单在线生成工具。
 
+> 📖 完整项目文档见根目录 [README.md](../README.md) 和 [docs/项目手册.md](../docs/项目手册.md)。
+
 ## 启动
 
 ```bash
