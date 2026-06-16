@@ -12,10 +12,10 @@
 | **Core Value** | Not a template tool — a **data integration engine**: parse once, reuse forever; data stays on server, files deleted after processing |
 | **Output Files** | Excel quotation (with images), PDF quotation, Proforma Invoice PI, Packing List, Commercial Invoice (5 types, all connected) |
 | **Non-Functional** | Upload-to-quote 3-60 seconds; Web-based (Next.js + FastAPI); Chinese-first UI |
-| **Architecture** | Frontend: Next.js on Vercel. Backend: FastAPI on Railway. Universal parser handles table/KV/multi-product formats |
-| **Current Status** | ✅ Universal parser (three-strategy: KV→Table→Content-driven, scored). ✅ PDF parser (three-strategy: layout→content→scored, +Docling fallback). ✅ DOCX parser. ✅ Image column filtering. ✅ Auto currency detection. ✅ Price configuration (JSON + multi-industry + regex). ✅ PostgreSQL migration (Supabase). ✅ Creem subscription payments (checkout + webhook). ✅ Dual-token auth (access + refresh httpOnly). ✅ Usage quota display. ✅ RMB price column (price_cny). ✅ Export column selection (11 checkboxes). ✅ Language fixes. ✅ CLI packing/invoice. ✅ Product library batch delete |
-| **Web UI** | ✅ Live — Next.js web app. No longer using Streamlit plan |
-| **Monetization** | Free tier (3 files) + Registered free + Pro ¥39/month (early bird, regular ¥69/month). Manual WeChat payment + manual activation |
+| **Architecture** | Frontend: Next.js on Vercel. Backend: FastAPI on Alibaba Cloud VPS (Singapore) |
+| **Current Status** | ✅ Universal parser. ✅ PDF parser. ✅ DOCX parser. ✅ Image matching. ✅ Currency detection. ✅ PostgreSQL migration. ✅ Creem payments. ✅ Dual-token auth. ✅ API rate limiting. ✅ Sentry monitoring. ✅ Email system (Resend/SMTP). ✅ Password reset. ✅ CI/CD. ✅ 37 unit tests |
+| **Web UI** | ✅ Live — Next.js web app |
+| **Monetization** | Free tier (20 uploads/month, 200 products) + Pro $9.99/month (USD) / ¥39/month (CNY) |
 
 ---
 

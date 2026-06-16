@@ -1,73 +1,58 @@
-# 报价整合工具 — 前端 (landing/)
+# QuoteFlow 前端
 
-外贸报价整合系统，基于 Next.js 16 + Tailwind CSS 4。
+Next.js 16 App Router 前端 — 产品报价单在线生成工具。
 
-## 快速开始
+## 启动
 
 ```bash
 npm install
-npm run dev        # 开发模式，默认 localhost:3000
+npm run dev        # 开发 (http://localhost:3000)
+npm run build && npm start  # 生产
 ```
 
 ## 环境变量
 
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| `NEXT_PUBLIC_API_URL` | 后端 API 地址（生产必设） | `http://127.0.0.1:8000` |
+在 Vercel Dashboard 或 `.env.local` 中设置：
+
+| 变量 | 值 |
+|------|-----|
+| `NEXT_PUBLIC_API_URL` | `https://api.quoteflow.it.com` 或本地 `http://127.0.0.1:8000` |
+| `NEXT_PUBLIC_SENTRY_DSN` | Sentry DSN（可选） |
+
+## 页面路由
+
+| 路由 | 页面 | 说明 |
+|------|------|------|
+| `/` | 首页 | 文件上传 + 解析 + 报价生成（匿名可用） |
+| `/pricing` | 定价 | Free vs Pro ($9.99/月) |
+| `/how-it-works` | 工作原理 | 功能导览 |
+| `/login` | 登录 | |
+| `/register` | 注册 | 用户名 + 邮箱 + 密码 |
+| `/forgot-password` | 忘记密码 | 邮箱发送重置链接 |
+| `/reset-password` | 重置密码 | token 验证后设新密码 |
+| `/workspace` | 工作台 | 产品库 + 报价历史 + 生成（需登录） |
+| `/account` | 账户设置 | 公司信息 + 银行信息 |
+| `/terms` | 服务条款 | |
+| `/privacy` | 隐私政策 | |
+| `/payment/success` | 支付成功 | 轮询 Pro 升级状态 |
+| `/payment/cancel` | 支付取消 | |
 
 ## 目录结构
 
 ```
-app/
-├── page.js            # 首页（上传解析 + 生成报价）
-├── workspace/page.js  # 工作台（产品库 + 报价历史 + 智能粘贴）
-├── login/page.js      # 登录
-├── register/page.js   # 注册
-├── forgot-password/page.js # 忘记密码
-├── pricing/page.js    # 定价
-├── how-it-works/      # 工作原理
-├── account/page.js    # 账户设置
-├── payment/success/   # 支付成功
-├── payment/cancel/    # 支付取消
-├── layout.js          # 全局布局 + ErrorBoundary
-├── globals.css        # 设计系统变量
-components/
-├── Nav.js             # 导航栏（i18n + LocaleToggle）
-├── Footer.js          # 页脚（i18n）
-├── ErrorBoundary.js   # 错误边界（i18n）
-├── LocaleToggle.js    # EN/中文 切换按钮
-├── ClientLayout.js    # 客户端包裹层
-lib/
-├── api.js             # API 地址配置
-├── auth.js            # Token/用户管理
-├── errors.js          # 中文友好错误消息
-├── i18n.js            # LocaleProvider / useLocale / t()
-├── locale.js          # IP 检测 + localStorage
-translations/
-├── zh.json            # 中文翻译
-├── en.json            # 英文翻译
+landing/
+├── app/                       # App Router 页面
+├── components/                # 共享组件 (Nav, Footer, ErrorBoundary)
+├── lib/                       # 工具库 (auth, i18n, api, errors)
+├── translations/              # 中/英文翻译
+├── next.config.mjs            # CSP 安全头配置
+└── package.json
 ```
 
-## 部署
+## 技术栈
 
-```bash
-npm run build
-npx vercel --prod
-```
-
-生产环境必须设置 `NEXT_PUBLIC_API_URL` 指向部署的后端地址。
-
-
-## Recent Updates
-- RMB price column (price_cny) full pipeline: parse → save → display → export
-- Export column selection: 11 checkboxes in export settings
-- Language fixes: cur_sym ($/¥), PDF header translation, payment terms parsing
-- Customer delete in company info section
-- Commercial invoice & packing list preview now matches actual output
-
-## Recent Updates (Phase 3-4)
-- PostgreSQL + ORM (Supabase)
-- Creem subscription payments (checkout + webhook)
-- Dual-token auth (access + refresh httpOnly cookie)
-- Usage quota display in workspace
-- Bug fixes: change-password async ORM, quota await/db, user.id dict access
+- React 19 (全 `'use client'` 组件)
+- Tailwind CSS v4
+- @vercel/analytics
+- @sentry/browser (可选错误监控)
+- Context API i18n (中/英文切换)
