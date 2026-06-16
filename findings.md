@@ -1,52 +1,44 @@
-# Findings
+# 调研发现
 
-## PDF Image Matching (Phase 1)
+## 已完成修复
 
-### Root Cause
-- `pdf_parser.py` line 1154-1178 `_associate_images_to_products()`: checks if `product_model in img_filename`
-- PyMuPDF saves images as `page{N}_img{M}.{ext}` → never contains model number → always fails
-- PDF image directory `{pdf_dir}/images/{name}/` not in `/api/images` whitelist (main.py lines 824-864)
+### 商业化就绪审查 (2026-06-16)
 
-### Solution: Position-based matching
-- `extract_images_from_pdf()` returns `[{'page': int, 'index': int, 'image_path': str}]`
-- Tables are extracted per page → we know which products are on which page
-- Match: for products on page N, assign images from page N sequentially
+发现未做商业化就绪评估。经全面审计发现 16 项缺失：
 
-## Scanned PDF Detection (Phase 2)
+**P0 (6项):**
+- 无 API 限流 → 已加 slowapi
+- 无 HSTS → 已加安全头
+- 注册无 email → 已改为必填
+- 无邮件系统 → 已加 Resend/SMTP
+- 忘记密码是死胡同 → 已完成邮件重置流程
+- 无错误监控 → 已接 Sentry
 
-### Root Cause
-- pdfplumber reads zero text from scanned/image PDFs
-- All 3 strategies produce empty results
-- Docling fallback fails with "this model does not support pdf input"
-- `extract_products_from_pdf_v2()` returns None → main.py shows "文件中未找到产品数据"
+**P1 (7项):**
+- 日志无结构 → 已加 JSON 格式
+- 无 XSS 防护 → 已加 html.escape
+- SEO 缺失 → 已补 meta 标签
+- 无法律文档 → 已建 ToS + 隐私
+- 无用户引导 → 已加 onboarding
+- CI 只有部署 → 已加测试/lint
+- 支付无通知 → 已加升级邮件
 
-### Solution
-- After pdfplumber reads all pages, check total extracted text length
-- If text < threshold (e.g. 50 chars), mark as likely scanned
-- Return specific status: scanned_pdf=true
+**文档 (全部缺失):**
+- README/ARCHITECTURE/CHANGELOG/CONTRIBUTING/SECURITY → 已新建
+- AGENTS.md/已知限制.md → 已更新
 
-## Performance Optimization (Phase 3)
+---
 
-### Redundancy Details
-1. `load_workbook` called 3-4x per Excel parse:
-   - universal_parser.py:757 (data_only=True)
-   - run.py:149 (detect_parser_type, read_only=True)
-   - excel_parser_v3.py:837 (image extraction, read_only=False)
-   - excel_parser_v3.py:925 (fallback, read_only=True)
+## 历史调研 (已解决)
 
-2. Image extraction 2-3x per Excel:
-   - universal_parser calls match_images_to_products()
-   - run.parse_file calls match_images_to_products()
-   - excel_parser_v3 calls extract_images_from_worksheet() internally
+### PDF 图片匹配 (Phase 1)
+根因：PyMuPDF 生成文件名不含型号信息
+解决：改为页面位置顺序匹配 (已部署)
 
-3. All 4 universal parser strategies run unconditionally:
-   - KV, Table, Content, No-header — even if KV already perfect
+### 扫描 PDF 检测 (Phase 2)  
+根因：扫描 PDF 无文字，三种策略均返回空
+解决：检测文字总量，<50 字符时提示用户 (已部署)
 
-4. sys.modules cache clearing on every PDF parse:
-   - pdf_handler.py deletes 'pdf_parser' from sys.modules → forces re-import
-
-### Quick Wins
-- Cache openpyxl Workbook object across calls
-- After KV strategy, check score → skip remaining if high enough
-- Extract images once, pass result between functions
-- Run universal + specialized in parallel via asyncio.gather
+### 性能优化 (Phase 3)
+根因：重复 load_workbook、重复图片提取、无条件策略执行
+解决：缓存 workbook、提前退出策略、统一图片提取 (已部署)

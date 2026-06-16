@@ -367,7 +367,9 @@
     }
   },
   "footer": {
-    "copyright": "报价整合工具 · 专为外贸 SOHO 设计 · 上传加密处理，解析完即删"
+    "copyright": "报价整合工具 · 专为外贸 SOHO 设计 · 上传加密处理，解析完即删",
+    "terms": "服务条款",
+    "privacy": "隐私政策"
   },
   "error": {
     "title": "页面出现异常",
@@ -390,12 +392,18 @@
     "forgotTitle": "忘记密码",
     "forgotDesc": "请联系管理员重置密码：",
     "email": "邮箱",
-    "emailPlaceholder": "选填，用于接收通知",
+    "emailPlaceholder": "必填，用于找回密码",
+    "errorEmail": "请输入有效的邮箱地址",
     "contactAdmin": "联系管理员",
     "backToLogin": "返回登录",
     "forgotWechat": "微信：",
     "forgotWechatNote": "添加微信时请备注「密码重置」",
     "forgotCollapse": "收起联系方式",
+    "forgotSent": "重置链接已发送！请检查邮箱。",
+    "forgotSubmit": "发送重置链接",
+    "resetPassword": "重置密码",
+    "resetSuccess": "密码重置成功！即将跳转到登录页...",
+    "resetInvalid": "重置链接已过期或无效。",
     "registerFailed": "注册失败",
     "usernamePlaceholder": "英文、数字、下划线",
     "passwordPlaceholder": "至少 6 位",

@@ -9,8 +9,22 @@ from datetime import datetime
 
 from pathlib import Path
 
+# Sentry — error monitoring (initialized early to catch init errors too)
+SENTRY_DSN = os.getenv("SENTRY_DSN")
+if SENTRY_DSN:
+    import sentry_sdk
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        traces_sample_rate=0.3,
+        environment="production" if not os.getenv("DEV") else "development",
+    )
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# 可选：启用结构化 JSON 日志（设 LOG_JSON=1）
+if os.getenv("LOG_JSON"):
+    from logger import setup_structured_logging
+    setup_structured_logging()
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +61,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 
 from fastapi.staticfiles import StaticFiles
+
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 import pandas as pd
 
@@ -88,6 +106,21 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(title="报价整合工具 API", version="1.0.0", max_upload_size=100_000_000, lifespan=lifespan)
+
+#  限流 — 支持 nginx 代理获取真实 IP
+def _get_real_ip(request: Request) -> str:
+    """从 X-Forwarded-For / X-Real-IP 获取真实客户端 IP，兜底用直连 IP"""
+    xff = request.headers.get("X-Forwarded-For")
+    if xff:
+        return xff.split(",")[0].strip()
+    xri = request.headers.get("X-Real-IP")
+    if xri:
+        return xri.strip()
+    return get_remote_address(request)
+
+limiter = Limiter(key_func=_get_real_ip)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 #  统一上传大小限制 
@@ -235,6 +268,8 @@ async def add_security_headers(request: Request, call_next):
 
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
 
+    response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
+
     return response
 
 
@@ -309,13 +344,31 @@ async def payment_webhook(request: Request, db: AsyncSession = Depends(get_sessi
 
     if action_type == 'activate':
         user.tier = 'pro'
+        # Store subscription details from Creem webhook data
+        if isinstance(data, dict):
+            user.subscription_id = data.get('subscription_id') or data.get('id')
+            if data.get('current_period_end'):
+                user.subscription_end = data['current_period_end']
         logger.info(f"User {user_id} upgraded to pro via Creem")
+        # 发送升级通知邮件
+        await _notify_upgrade(user)
     elif action_type == 'deactivate':
         user.tier = 'free'
         logger.info(f"User {user_id} downgraded to free")
 
     await db.commit()
     return {"status": "ok"}
+
+
+async def _notify_upgrade(user: User):
+    """发送 Pro 升级确认邮件"""
+    if not user.email:
+        return
+    try:
+        from mailer import send_email, UPGRADE_HTML
+        await send_email(to=user.email, subject="QuoteFlow Pro 升级成功！", html=UPGRADE_HTML)
+    except Exception as e:
+        logger.warning(f"Failed to send upgrade email to {user.email}: {e}")
 
 
 #  Health 
@@ -341,23 +394,33 @@ async def exchange_rate(from_currency: str = Query("USD"), to_currency: str = Qu
 #  Auth endpoints
 
 @app.post("/api/auth/register")
-
+@limiter.limit("5/minute")
 async def register(
+    request: Request,
     username: str = Form(...),
     password: str = Form(...),
+    email: str = Form(...),
     db: AsyncSession = Depends(get_session),
 ):
     if not re.match(r'^[a-zA-Z0-9_]+$', username):
         raise HTTPException(400, "用户名仅限英文,数字,下划线")
     if len(password) < 6:
         raise HTTPException(400, "密码至少 6 位")
+    if not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
+        raise HTTPException(400, "邮箱格式不正确")
 
     existing = await get_user_by_username(db, username)
     if existing:
         raise HTTPException(400, "用户名已存在")
 
+    # Check email uniqueness
+    from sqlalchemy import select as _sel
+    email_check = await db.execute(_sel(User).where(User.email == email))
+    if email_check.scalar_one_or_none():
+        raise HTTPException(400, "邮箱已被注册")
+
     pw_hash = hash_password(password)
-    new_user = User(username=username, password_hash=pw_hash, tier='free')
+    new_user = User(username=username, password_hash=pw_hash, tier='free', email=email)
     db.add(new_user)
     await db.commit()
     await db.refresh(new_user)
@@ -378,8 +441,9 @@ async def register(
 
 
 @app.post("/api/auth/login")
-
+@limiter.limit("5/minute")
 async def login(
+    request: Request,
     username: str = Form(...),
     password: str = Form(...),
     db: AsyncSession = Depends(get_session),
@@ -471,6 +535,56 @@ async def change_password(
     user.password_hash = hash_password(new_password)
     await db.commit()
     return {"status": "ok"}
+
+
+@app.post("/api/auth/forgot-password")
+@limiter.limit("3/minute")
+async def forgot_password(
+    request: Request,
+    email: str = Form(...),
+    db: AsyncSession = Depends(get_session),
+):
+    """发送密码重置邮件"""
+    from auth import get_user_by_email, create_reset_token
+    from mailer import send_email, make_reset_html
+
+    user = await get_user_by_email(db, email)
+    if not user:
+        # 不暴露邮箱是否注册 → 统一返回 ok
+        return {"status": "ok", "message": "如果邮箱已注册，重置链接已发送"}
+
+    token = create_reset_token(user.id)
+    reset_url = f"{os.getenv('BASE_URL', 'https://quoteflow.it.com')}/reset-password?token={token}"
+    html = make_reset_html(reset_url)
+    await send_email(to=email, subject="QuoteFlow 密码重置", html=html)
+    return {"status": "ok", "message": "如果邮箱已注册，重置链接已发送"}
+
+
+@app.post("/api/auth/reset-password")
+@limiter.limit("5/minute")
+async def reset_password(
+    request: Request,
+    token: str = Form(...),
+    new_password: str = Form(...),
+    db: AsyncSession = Depends(get_session),
+):
+    """使用重置 token 设置新密码"""
+    from auth import decode_reset_token, get_user_by_id, hash_password as hpw
+
+    if len(new_password) < 6:
+        raise HTTPException(400, "新密码至少6位")
+
+    user_id = decode_reset_token(token)
+    if user_id is None:
+        raise HTTPException(400, "重置链接已过期或无效")
+
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(400, "用户不存在")
+
+    user.password_hash = hpw(new_password)
+    await db.commit()
+    return {"status": "ok", "message": "密码已重置，请登录"}
 
 
 #  Products API (数据库路径与 product_manage/db.py 统一) 
@@ -724,6 +838,9 @@ async def save_products(products: str = Form(...), user: dict = Depends(get_curr
     if not items or not isinstance(items, list):
 
         raise HTTPException(400, "产品列表不能为空")
+
+    from sanitize import sanitize_products
+    items = sanitize_products(items)
 
     # 检查每个产品至少要model
 
@@ -1125,9 +1242,9 @@ async def load_bank_info(user: User = Depends(get_current_user)):
 #  Parse file (2-step pipeline) 
 
 @app.post("/api/parse")
-
+@limiter.limit("20/minute")
 async def parse_file(
-
+    request: Request,
     file: UploadFile = File(...),
 
     user: User = Depends(get_current_user_optional),
@@ -1449,6 +1566,8 @@ async def parse_text_products(data: dict = Body(...), user: User = Depends(get_c
         return {"products": [], "count": 0}
     try:
         products = parse_text_to_products(text, backend='deepseek')
+        from sanitize import sanitize_products
+        products = sanitize_products(products)
         return {"products": products, "count": len(products)}
     except Exception as e:
         raise HTTPException(422, f"文本解析失败: {str(e)}")
@@ -1823,10 +1942,7 @@ async def generate_pi(
 
     user: User = Depends(get_current_user)):
     # Pro 功能校验
-    _pro_user = await get_current_user_optional(authorization, db)
-    if not _pro_user:
-        raise HTTPException(401, "请先登录")
-    require_pro(_pro_user)
+    require_pro(user)
 
     items = json.loads(products)
 

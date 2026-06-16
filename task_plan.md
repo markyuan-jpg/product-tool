@@ -1,30 +1,46 @@
-# Fix Plan: PDF Images + Performance + OCR Detection
+# 任务计划
 
-## Goal
-Fix 3 issues with PDF parsing and Excel performance
+## ✅ 已完成 (2026-06-16)
 
-## Phases
+### 商业化就绪 P0
+- [x] API 限流 (slowapi) — 登录/注册 5次/分, 解析 20次/分
+- [x] HSTS 安全头 — 前后端均已添加
+- [x] 注册加 email 必填 — 后端验证 + 邮箱唯一性检查
+- [x] 邮件基础设施 — Resend/SMTP/noop 三通道
+- [x] 忘记密码完整流程 — 邮件发送重置链接 → token 验证 → 设新密码
+- [x] Sentry 错误监控 — 后端 sentry-sdk + 前端 ErrorBoundary 集成
 
-### Phase 1: PDF Image Matching
-- **Problem**: `_associate_images_to_products()` matches model string vs generic filename `page1_img1.png` → always fail. Also PDF image dir not in whitelist.
-- **Fix**: Position-based matching (by page order), add PDF image dir to whitelist
-- **Files**: `product_tool/src/core/pdf_parser.py`, `backend/main.py`
-- **Status**: pending
+### 商业化就绪 P1
+- [x] 结构化日志 — LOG_JSON=1 启用 JSON 格式输出
+- [x] XSS 输入清洗 — html.escape 所有文本字段
+- [x] SEO 优化 — 首页/定价/工作原理页动态 meta 标签
+- [x] ToS + 隐私政策 — /terms /privacy 页面 + Footer 链接
+- [x] 用户引导 — 首次 workspace 显示 onboarding 卡片
+- [x] CI 工作流 — backend tests + frontend lint
+- [x] 支付 Webhook 邮件通知 — 升级时自动发邮件
 
-### Phase 2: Scanned PDF Detection (Clear Error Message)
-- **Problem**: pdfplumber/Docling can't parse scanned PDF → returns "文件中未找到产品数据", misleading
-- **Fix**: Detect textless PDF → show "当前PDF为扫描件，请上传文字型PDF文件"
-- **Files**: `backend/main.py` or `product_tool/src/core/pdf_parser.py`
-- **Status**: pending
+### 文档
+- [x] README.md (新建)
+- [x] ARCHITECTURE.md (新建)
+- [x] CHANGELOG.md (新建)
+- [x] CONTRIBUTING.md (新建)
+- [x] SECURITY.md (新建)
+- [x] AGENTS.md 更新 (env vars)
+- [x] docs/已知限制.md 更新 (安全限制)
 
-### Phase 3: Performance Optimization
-- **Problem**: Multiple redundant `load_workbook`, duplicate image extraction, unconditional strategy runs
-- **Fix**: Cache workbook, early exit from strategies, reduce redundant image work
-- **Files**: `backend/universal_parser.py`, `product_tool/src/parse/excel_parser_v3.py`, `product_tool/src/core/image.py`, `backend/run.py`
-- **Status**: pending
+---
 
-## Final Verification
-- Upload PDF with embedded images → images show up
-- Upload scanned PDF → clear error "扫描件，不支持"
-- Upload Excel file → parse speed noticeably faster
-- All existing tests pass
+## 📋 待完成
+
+### P0 剩余
+- [ ] P0-2: 后端测试 (backend/tests/)
+
+### P2 (有用户基础后)
+- [ ] Docker 化部署
+- [ ] Server Components (SSR)
+- [ ] 验证码 (Turnstile)
+- [ ] CSRF 防护加固
+- [ ] 管理后台
+- [ ] 数据自动备份脚本
+- [ ] 多语言完善 (lang 动态切换)
+- [ ] Webhook subscription_id/subscription_end 补全 ✅ (已在本次更新完成)

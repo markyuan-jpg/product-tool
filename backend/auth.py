@@ -55,6 +55,23 @@ def create_refresh_token(user_id: int) -> str:
     return pyjwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
+def create_reset_token(user_id: int) -> str:
+    """一次性密码重置 token，15 分钟有效"""
+    expire = datetime.utcnow() + timedelta(minutes=15)
+    payload = {"sub": str(user_id), "exp": expire, "type": "reset"}
+    return pyjwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def decode_reset_token(token: str) -> Optional[int]:
+    """解码密码重置 token，返回 user_id 或 None"""
+    payload = decode_token(token)
+    if payload is None:
+        return None
+    if payload.get('type') != 'reset':
+        return None
+    return int(payload['sub'])
+
+
 def decode_token(token: str) -> Optional[dict]:
     """Decode and validate JWT. Returns payload dict or None on failure."""
     try:
@@ -74,6 +91,11 @@ async def get_user_by_id(db: AsyncSession, user_id: int) -> Optional[User]:
 
 async def get_user_by_username(db: AsyncSession, username: str) -> Optional[User]:
     result = await db.execute(select(User).where(User.username == username))
+    return result.scalar_one_or_none()
+
+
+async def get_user_by_email(db: AsyncSession, email: str) -> Optional[User]:
+    result = await db.execute(select(User).where(User.email == email))
     return result.scalar_one_or_none()
 
 

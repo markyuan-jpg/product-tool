@@ -367,7 +367,9 @@
     }
   },
   "footer": {
-    "copyright": "Quote Integrator · Built for Trade SOHO · Encrypted upload, auto-deleted after parsing"
+    "copyright": "Quote Integrator · Built for Trade SOHO · Encrypted upload, auto-deleted after parsing",
+    "terms": "Terms of Service",
+    "privacy": "Privacy Policy"
   },
   "error": {
     "title": "Something went wrong",
@@ -390,12 +392,18 @@
     "forgotTitle": "Forgot Password",
     "forgotDesc": "Please contact the admin to reset your password:",
     "email": "Email",
-    "emailPlaceholder": "Optional, for notifications",
+    "emailPlaceholder": "Required, for password reset",
+    "errorEmail": "Please enter a valid email address",
     "contactAdmin": "Contact Admin",
     "backToLogin": "Back to Login",
     "forgotWechat": "WeChat: ",
     "forgotWechatNote": "Please note \"password reset\" when adding",
     "forgotCollapse": "Collapse",
+    "forgotSent": "Reset link sent! Check your email.",
+    "forgotSubmit": "Send Reset Link",
+    "resetPassword": "Reset Password",
+    "resetSuccess": "Password reset successfully! Redirecting to login...",
+    "resetInvalid": "Invalid or expired reset link.",
     "registerFailed": "Registration failed",
     "usernamePlaceholder": "Letters, numbers, underscores",
     "passwordPlaceholder": "At least 6 characters",

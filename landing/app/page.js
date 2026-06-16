@@ -42,6 +42,20 @@ export default function Home() {
 
   useEffect(() => { if (isLoggedIn()) setAuthUser(getStoredUser()); }, []);
 
+  // SEO — set page title and meta description dynamically
+  useEffect(() => {
+    if (!ready) return;
+    document.title = locale === 'zh'
+      ? 'QuoteFlow - 产品报价单在线生成工具'
+      : 'QuoteFlow - Product Quotation Generator';
+    const desc = locale === 'zh'
+      ? '上传 Excel / PDF / Word 产品文件，自动解析生成报价单。免费使用。'
+      : 'Upload Excel, PDF, or Word product files. Auto-parse and generate quotations. Free to use.';
+    let meta = document.querySelector('meta[name="description"]');
+    if (!meta) { meta = document.createElement('meta'); meta.name = 'description'; document.head.appendChild(meta); }
+    meta.setAttribute('content', desc);
+  }, [locale, ready]);
+
   const handleDrag = useCallback((e) => { e.preventDefault(); e.stopPropagation(); }, []);
   const handleDrop = useCallback((e) => {
     e.preventDefault(); e.stopPropagation(); setDragOver(false);

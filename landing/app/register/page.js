@@ -13,6 +13,7 @@ export default function RegisterPage() {
   const { locale, ready } = useLocale();
   if (!ready) return null;
   const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [showPw, setShowPw] = useState(false);
@@ -29,6 +30,10 @@ export default function RegisterPage() {
       setError(t('auth.errorUsername', locale));
       return;
     }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      setError(t('auth.errorEmail', locale));
+      return;
+    }
     if (password.length < 6) {
       setError(t('auth.errorPassword', locale));
       return;
@@ -42,6 +47,7 @@ export default function RegisterPage() {
     try {
       const body = new URLSearchParams();
       body.append('username', username);
+      body.append('email', email);
       body.append('password', password);
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000);
@@ -68,6 +74,10 @@ export default function RegisterPage() {
             <div>
               <label className="text-xs font-medium text-[var(--text-secondary)]">{t('auth.username', locale)}</label>
               <input value={username} onChange={e => setUsername(e.target.value)} placeholder={t('auth.usernamePlaceholder', locale)} className="w-full mt-1 px-3 py-2 text-sm border border-[var(--border)] rounded-lg focus:outline-none focus:border-[var(--navy)]" required />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-[var(--text-secondary)]">{t('auth.email', locale)}</label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder={t('auth.emailPlaceholder', locale)} className="w-full mt-1 px-3 py-2 text-sm border border-[var(--border)] rounded-lg focus:outline-none focus:border-[var(--navy)]" required />
             </div>
             <div>
               <label className="text-xs font-medium text-[var(--text-secondary)]">{t('auth.password', locale)}</label>

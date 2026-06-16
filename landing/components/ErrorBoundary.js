@@ -3,6 +3,15 @@
 import { Component } from 'react';
 import { LocaleContext, t } from '@/lib/i18n';
 
+const _capture = (error, errorInfo) => {
+  try {
+    // Lazy-load Sentry to avoid hard dependency
+    import('@sentry/browser').then((Sentry) => {
+      Sentry.captureException(error, { extra: { componentStack: errorInfo?.componentStack } });
+    }).catch(() => {});
+  } catch (_) {}
+};
+
 export default class ErrorBoundary extends Component {
   static contextType = LocaleContext;
 
@@ -17,6 +26,7 @@ export default class ErrorBoundary extends Component {
 
   componentDidCatch(error, errorInfo) {
     console.error('[ErrorBoundary]', error, errorInfo);
+    _capture(error, errorInfo);
   }
 
   render() {

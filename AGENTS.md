@@ -101,6 +101,13 @@ Pro 升级返回 502。如需启用，在 `backend/.env` 中配置。
 | `CREEM_API_KEY` | 可选 | Creem 支付 |
 | `CREEM_WEBHOOK_SECRET` | 可选 | Creem Webhook 签名 |
 | `CREEM_PRODUCT_ID_PRO` | 可选 | Creem 产品 ID |
+| `SENTRY_DSN` | 可选 | Sentry 错误监控 DSN |
+| `RESEND_API_KEY` | 可选 | Resend 邮件 API Key |
+| `SMTP_HOST` | 可选 | SMTP 服务器地址（邮件备选方案） |
+| `SMTP_PORT` | 可选 | SMTP 端口 (默认 587) |
+| `SMTP_USER` | 可选 | SMTP 用户名 |
+| `SMTP_PASSWORD` | 可选 | SMTP 密码 |
+| `LOG_JSON` | 可选 | 设为 1 启用结构化 JSON 日志 |
 
 ### 常见问题排查
 
