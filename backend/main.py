@@ -1403,6 +1403,13 @@ async def parse_file(
 
         products = df.fillna('').to_dict(orient='records')
 
+        # 尺寸结构化提取
+        try:
+            from dimension_extractor import enrich_products_with_dimensions
+            products = enrich_products_with_dimensions(products)
+        except ImportError:
+            pass
+
         
 
         # 上传成功计数（仅登录用户）
@@ -1501,9 +1508,16 @@ async def parse_with_ai(file: UploadFile = File(...), ai_backend: str = Form("ge
 
                 products = df.fillna('').to_dict(orient='records')
 
+                # 尺寸结构化提取
+                try:
+                    from dimension_extractor import enrich_products_with_dimensions
+                    products = enrich_products_with_dimensions(products)
+                except ImportError:
+                    pass
+
                 return {"products": products, "count": len(products), "parse_source": "cached_ai"}
 
-            df = pd.DataFrame()
+            df = pd.DataFrame()  # low coverage → fall through to AI detection
 
 
         # AI column detection
@@ -1536,6 +1550,13 @@ async def parse_with_ai(file: UploadFile = File(...), ai_backend: str = Form("ge
 
 
         products = df.fillna('').to_dict(orient='records')
+
+        # 尺寸结构化提取
+        try:
+            from dimension_extractor import enrich_products_with_dimensions
+            products = enrich_products_with_dimensions(products)
+        except ImportError:
+            pass
 
         return {"products": products, "count": len(products), "parse_source": "ai"}
 
