@@ -97,11 +97,8 @@ def _is_reasonable_price(p):
     this_year = datetime.now().year
     if this_year - 3 <= p <= this_year + 5 and p == int(p) and 2000 <= p <= 2100:
         return False
-    # 排除纯序号（1~9的小整数）
-    if 1 <= p <= 9 and p == int(p):
-        return False
-    # 排除极小值
-    if p <= 0.1:
+    # 排除极小值（<0.01，如分数、百分比等）
+    if p < 0.01:
         return False
     # 排除极大值
     if p >= 10000000:
@@ -116,7 +113,8 @@ def score_product_row(model: str, price, spec_zh: str) -> float:
     spec = str(spec_zh).strip() if spec_zh else ''
 
     has_price = _is_reasonable_price(p)
-    has_spec = len(spec) > 30
+    # 规格检测：长度>15 OR 包含"数字+单位"模式（更精准）
+    has_spec = len(spec) > 15 or bool(re.search(r'\d+\.?\d*\s*(mm|cm|m|kg|g|w|v|a|hz|℃|°|%|升|毫升|瓦|伏)', spec.lower()))
     is_empty = not m or len(m) < 2
 
     # 检查model是否包含条款/字段关键词
@@ -204,15 +202,13 @@ def score_dataframe(df) -> dict:
     bonus = 0.0
     unique_real = len(set(
         str(row['model']).strip() for _, row in df.iterrows()
-        if 2 <= len(str(row.get('model', '')).strip()) <= 30
-        and bool(_REAL_MODEL_RE.search(str(row.get('model', ''))))
-        and bool(_REAL_DIGIT_RE.search(str(row.get('model', ''))))
+        if is_valid_model(str(row.get('model', '')), strict=False)  # 使用统一验证，与评分一致
     ))
     if unique_real >= 3:
         bonus += 3.0  # 有 ≥3 个不同真型号
     if prices >= 3:
         bonus += 2.0  # 有 ≥3 个产品有价格
-    empty_ratio = sum(1 for s in product_scores if s <= -3) / n if n > 0 else 1
+    empty_ratio = sum(1 for s in product_scores if s <= -2) / n if n > 0 else 1  # 计入 -2 和 -3
     if empty_ratio < 0.2 and n >= 3:
         bonus += 1.0  # 空行/噪音比例 < 20%
 
