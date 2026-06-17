@@ -10,7 +10,10 @@ COLUMN_SIGNALS = {
     'name': ['产品名称', '产品名', '品名', '名称', '商品名', '产品', 'product',
              'name', '项目', '物料名称', '货物名称',
              '品名规格', '商品名称', '产品描述', '物料描述',
-             'item description', 'goods name', 'article name'],
+             'item description', 'goods name', 'article name',
+             # 多语种产品名
+             'produit', 'produkt', '商品名', 'descripción', 'descrizione',
+             'produto', 'naam', 'produktname', 'productnaam', 'designation'],
     'model': ['型号', '产品编号', '物料编码', '料号', '货号', '编码', '商品代码',
               'model', 'part no', 'p/n', 'product no', 'sku', 'item no',
               '款号', 'item code', 'reference no', 'product code',
@@ -36,9 +39,12 @@ COLUMN_SIGNALS = {
               'fca', 'ddp', 'cpt', 'cip', 'c&f', 'cfr',
               '退税', '含税价', '不含税'],
     'qty': ['数量', '订货量', '起订量', 'qty', 'quantity', '数量',
-            'pcs', 'sets', 'pair', '件', '套', '双',
-            'pack qty', '数量/箱', '装箱数', '每箱数量',
-            '净含量', 'net weight', 'n.w.', '每箱', 'pcs/ctn'],
+             'pcs', 'sets', 'pair', '件', '套', '双',
+             'pack qty', '数量/箱', '装箱数', '每箱数量',
+             '净含量', 'net weight', 'n.w.', '每箱', 'pcs/ctn',
+             # 新增 MOQ 补全
+             'moq', 'minimum order', '最小起订量', '最低订购量',
+             'min order qty', 'min order', '最少订货', '最少起订'],
     'packing': ['包装', '内盒', '外箱', '每箱', 'packing', 'package', '装箱明细', 'packing list',
                 'carton size', '测量', 'meas', 'cbm', '体积', '外箱尺寸',
                 'carton', 'ctn', '箱规', '装箱', 'pack qty', '每箱数量', 'qty/ctn', 'pcs/ctn',
@@ -47,6 +53,30 @@ COLUMN_SIGNALS = {
                 'gross weight', 'net weight', 'dimension', 'measurement',
                 'units per carton', 'carton weight'],
     'remark': ['备注', 'remark', 'remarks', '条款', 'note', '说明', '附注'],
+    # 新增 — 品牌/制造商
+    'brand': ['brand', '品牌', 'manufacturer', '制造商', 'supplier', '厂家', '供应商',
+              '厂商', 'maker', 'producer', '牌子', '商标', 'trademark'],
+    # 新增 — 认证
+    'cert': ['certification', 'cert', '认证', 'ce', 'fcc', 'rohs', 'reach',
+             'fda', 'iso', 'ul', 'ccc', 'sgs', '证书', 'standard', '标准',
+             'approval', 'approved', 'compliant', 'compliance', '达标'],
+    # 新增 — HS编码
+    'hscode': ['hs code', 'hs编码', 'hts', 'tariff code', 'customs code',
+               '海关编码', '税号', 'h.s.code', 'h.s. code', 'tariff no',
+               'hs no', 'hs number'],
+    # 新增 — 交货期
+    'lead_time': ['lead time', 'delivery time', '交货期', '交期', '货期',
+                  '出货时间', 'delivery date', 'delivery schedule', 'leadtime',
+                  'ship date', 'shipment date'],
+    # 新增 — 质保
+    'warranty': ['warranty', '保修', '质保期', '保质期', 'guarantee',
+                 'warranty period', '保修期', '保质', '质保', '售后服务'],
+    # 新增 — 条形码
+    'barcode': ['barcode', 'bar code', 'ean', 'upc', 'gtin', '条形码', '条码',
+                'ean13', 'ean-13', 'upc-a', 'upc-e', '商品条码', 'ean code'],
+    # 新增 — 原产地（从过滤列表改为可识别）
+    'origin': ['origin', 'country of origin', '原产地', '产地', 'made in',
+               'country', '国家', 'origin country', '来源地', '生产地'],
 }
 
 COLUMN_SIGNALS_FLAT = ['产品名称', '产品名', '品名', '名称', 'name', 'product',
@@ -72,10 +102,10 @@ SKIP_HEADER_KEYWORDS = ['公司', '地址', '电话', '联系人', 'mail', 'webs
                         'tel', 'fax', 'add', 'buyer', 'consignee', 'shipper', 'invoice', 'date',
                         'shipment', 'delivery', 'payment', '信用证', 'l/c', 't/t',
                         'shipping mark', '唛头', 'mark', '合同', 'contract', 'po', 'order',
-                        '有效期', 'validity', 'offer valid', 'valid until',
+                        '有效���', 'validity', 'offer valid', 'valid until',
                         '检验', 'inspection', 'test report', '质检', 'quality',
                         'loading port', 'port of loading', 'port of discharge',
-                        '装运港', '目的港', '船期', '原产地', 'certificate', '产地证',
+                        '装运港', '目的港', '船期', 'certificate', '产地证',
                         'oem', 'customized', '定制', 'logo']
 
 
@@ -120,8 +150,7 @@ PRODUCT_SKIP_WORDS = ['条款', '备注', '说明', '合计', 'total', 'subtotal
                       '有效期', 'offer valid', 'valid until',
                       '合同', 'contract', 'po', 'order',
                       'loading', 'discharge', 'port',
-                      'certificate', '产地证', '原产地',
-                      'customized', '定制', 'logo',
+                       'customized', '定制', 'logo',
                       # 定价条款（避免 "50件以下...包邮" 被误判为产品）
                       '包邮', '执行', '经销价',
                       '件以下', '件起', '非偏远',

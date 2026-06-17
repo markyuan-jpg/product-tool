@@ -735,25 +735,21 @@ def parse_vertical(ws, images_by_row: Dict[int, str] = None) -> pd.DataFrame:
             row['remark'] = footer_remark
         filtered.append(row)
     
-    # 分数过滤：单行评分 < -1 的噪音行删除
-    def _score_row(model, price, spec_zh):
-        """内联评分，避免跨模块导入依赖"""
-        import re as _re
-        m = str(model).strip() if model else ''
-        p = price if isinstance(price, (int, float)) else None
-        has_price = p is not None and p > 0
-        is_empty = not m or len(m) < 2
-        is_real = (2 <= len(m) <= 30 and bool(_re.search(r'[A-Za-z]', m))
-                   and bool(_re.search(r'\d', m)) and ':' not in m and '\uff1a' not in m)
-        if is_real and has_price: return 7.0
-        if is_real: return 2.0
-        if is_empty and not has_price: return -3.0
-        if len(m) > 40: return -2.0
-        return 1.0
+    # 分数过滤：使用统一的 score_product_row
+    try:
+        from score import score_product_row
+    except ImportError:
+        # Fallback: minimal inline scoring
+        def score_product_row(model, price, spec_zh):
+            m = str(model).strip() if model else ''
+            p = price if isinstance(price, (int, float)) else None
+            if not m or len(m) < 2: return -3.0
+            if p and p > 0: return 5.0
+            return 1.0
     
     clean = []
     for row in filtered:
-        if _score_row(row.get('model',''), row.get('price_rmb'), row.get('spec_zh','')) >= -1.5:
+        if score_product_row(row.get('model',''), row.get('price_rmb'), row.get('spec_zh','')) >= -1.5:
             clean.append(row)
     return pd.DataFrame(clean)
 
