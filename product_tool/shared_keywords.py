@@ -59,7 +59,7 @@ COLUMN_SIGNALS_FLAT = ['产品名称', '产品名', '品名', '名称', 'name', 
                        '等级', 'grade', '类别', 'category',
                        '箱规', '装箱', 'carton', '每箱', 'packing', 'cbm']
 
-SKIP_COLUMN_SIGNALS = ['serial', 'no.', 'image', 'picture', 'photo', '序号', '图片', '照片']
+SKIP_COLUMN_SIGNALS = ['serial no', 'sr.no', 'serial', 'image', 'picture', 'photo', '序号', '图片', '照片']
 
 PRICE_KEYWORDS = ['价格', '单价', '出厂价', '系统价格', '成本价', '成本', '报价', '金额', '含税', '成本价',
                    'exw', 'fob', 'cif', '批发价', '市场价', '零售价',
@@ -137,5 +137,62 @@ PRODUCT_SKIP_WORDS = ['条款', '备注', '说明', '合计', 'total', 'subtotal
 CONTENT_SPEC_KEYWORDS = ['规格', '尺寸', '参数', '材质', '颜色', 'spec', 'size', 'color',
                          '面料', '成分', 'material', 'dimension', '重量',
                          '色温', '流明', '功率', 'voltage', '容量', 'capacity',
-                         '纯度', '含量', '浓度', '表面', 'finish', '工艺',
-                         '毛重', '净重', 'carton', 'packing', '每箱']
+                          '纯度', '含量', '浓度', '表面', 'finish', '工艺',
+                          '毛重', '净重', 'carton', 'packing', '每箱']
+
+
+# ═══════════════════════════════════════════════════════════════
+# 统一非产品行过滤模式 — universal_parser + excel_parser_v3 共用
+# 由 build_non_product_patterns() 生成编译后的正则列表
+# ═══════════════════════════════════════════════════════════════
+
+_NON_PRODUCT_RAW_PATTERNS = [
+    # English field labels
+    r'^(contract|seller|buyer|payment|shipping|delivery|transshipment|remarks?|note|terms|conditions?|address|tel[.:\s]|fax[.:\s]|email|phone|website|bank|account|beneficiary|swift|contact|signature|date|invoice|validity|description)',
+    # Totals
+    r'^(total\s+amount|total\s+payment|grand\s+total|sub\s*total|total\s*[:：]|总计金额|合计金额)',
+    # Numbered clauses (English)
+    r'^\d+[.、\s]\s*(transshipment|payment|delivery|packing|insurance|bank|inspection|arbitration|force\s*majeure|shipping|terms?|conditions?|warranty|validity|quality|port|brand|motorcycle|e[\-\s]?bike|destination|notice|handling)',
+    # Chinese field labels
+    r'^(合同|卖方|买方|付款|交货|运输|包装|条款|备注|说明|地址|电话|邮箱|日期|受益|银行|账户|签名|签字|合计|总计|金额|小计|编号|序号)',
+    # Bare price/currency
+    r'^(\u00a5|\$|eur|usd|cny)\s*[\d,]+',
+    # Company info
+    r'^(company|supplier|customer|buyer|seller)(\s|$)',
+    # Chinese numbered clauses
+    r'^\d+[.、]\s*[（(]?\s*(本合|支付|交[货付]|运[输送]|包[装]|条[款]|备[注]|说[明]|地[址]|电[话]|日[期]|银[行]|账[户]|签[名字]|仲裁|保险)',
+    # Document titles
+    r'^(proforma\s+invoice|sales\s+contract|to\s*:|the\s+(seller|buyer)|sign(ed|ature)|date\s+of\s+)',
+    r'^total\s+payment',
+    # Port/brand/handling clauses
+    r'^\d+[.、]\s*(port\s+of|brand\s+name|handling\s+method|other\s+notices|motorcycle\s+brand)',
+    # Signature/stamp lines
+    r'^(\(signed|\(stamp|\(seal|signature\s+by|authorized\s+sign)',
+    r'^(sign(ed|ature)?|approv(ed|al)?|authoriz(ed|ation)?|seal|stamp|公章|签字|签名|盖章|审批)',
+    # Doc/order reference numbers
+    r'^(contract\s*no|order\s*no|po\s*no|invoice\s*no|ref\s*no|payment\s*no|shipment\s*no|delivery\s*no|doc\s*no|quotation\s*no|quote\s*no)\s*[:\-.]?\s*[\w\-]+',
+    r'^(PO|SO|CO|DO|WO|IV|INV|CT|CN|QT|RFQ|PI|DN|GRN)[\d\-]{8,20}$',
+    # Packing list headers
+    r'^(packing\s*(list|detail|info)|装箱(单|明细|清单))',
+    # Notification/declaration
+    r'^(notify\s+party|consignee|carrier|forwarder|agent)',
+    # Quality/test reports
+    r'^(test\s+report|inspection\s+report|certificate\s+of)',
+    # Unit of measure
+    r'^(unit\s+(of|in)|uom|计量单位|单位[：:])',
+    # Country of origin / manufacturer
+    r'^(country\s+of\s+origin|made\s+in|原产地|manufacturer)',
+    # Legal/business clauses
+    r'^(仲裁|保险|商检|产地证|原产地|信用证|l/?c|t/?t|不可抗力)',
+    # Auto-generated model placeholders
+    r'^(产品_r\d+|商品_×\d+)$',
+]
+
+import re as _re
+
+def build_non_product_patterns():
+    """返回编译后的非产品行过滤正则列表"""
+    return [_re.compile(p, _re.I) for p in _NON_PRODUCT_RAW_PATTERNS]
+
+# 预编译（模块加载时）
+NON_PRODUCT_PATTERNS = build_non_product_patterns()

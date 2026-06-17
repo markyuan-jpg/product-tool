@@ -11,6 +11,43 @@ _AUTO_MODEL_RE = re.compile(r'^(商品_?R\d+|PRODUCT_\d+|Item_\d+|\u5546\u54c1_\
 _REAL_MODEL_RE = re.compile(r'[A-Za-z]')
 _REAL_DIGIT_RE = re.compile(r'\d')
 
+# ─── 统一型号验证函数（供所有解析器导入） ───
+
+def is_valid_model(model_str: str, strict: bool = True) -> bool:
+    """统一的型号验证 — PDF/Excel/DOCX/universal 解析器共用。
+    
+    strict=True:  必须字母+数字 (评分/一致性计算用)
+    strict=False: 允许纯数字（价格列存在时可能是合法SKU）
+    """
+    if not model_str or not isinstance(model_str, str):
+        return False
+    m = model_str.strip()
+    if len(m) < 2 or len(m) > 40:
+        return False
+    if ':' in m or '：' in m:
+        return False
+    # 排除自动生成的假型号
+    if _AUTO_MODEL_RE.match(m):
+        return False
+    # 排除字段/条款关键词
+    if _contains_field_keyword(m):
+        return False
+    # 排除纯规格模式（mm+数字+usd 等）
+    if re.search(r'(\d+\.?\d*\s*mm|\d+\.?\d*\s*cm|\d+v\b|\d+w\b)', m.lower()):
+        return False
+    has_letter = bool(_REAL_MODEL_RE.search(m))
+    has_digit = bool(_REAL_DIGIT_RE.search(m))
+    # 中文字符限制（过多中文可能不是型号）
+    chinese_count = len(re.findall(r'[\u4e00-\u9fff]', m))
+    if chinese_count > 10:
+        return False
+    if strict:
+        # 严格模式：必须包含字母+数字
+        return has_letter and has_digit
+    else:
+        # 宽松模式：允许纯数字（可能为SKU），但不允许纯字母
+        return has_digit or (has_letter and len(m) <= 12)
+
 # 已知字段/条款名 — 这些不应被当作产品型号
 _FIELD_NAMES = {
     'contract', 'seller', 'buyer', 'payment', 'shipping', 'delivery',
@@ -39,9 +76,11 @@ def _contains_field_keyword(m: str) -> bool:
     # 精确匹配
     if ml in _FIELD_NAMES:
         return True
-    # 开头匹配（如 "CONTRACT NO." → "contract" 开头）
-    if any(ml.startswith(kw) for kw in _FIELD_NAMES if kw):
-        return True
+    # 词边界匹配（避免 "Contractor" 被 "contract" 误杀）
+    for kw in _FIELD_NAMES:
+        if kw and len(kw) >= 2:
+            if re.search(r'\b' + re.escape(kw) + r'\b', ml):
+                return True
     # 含有关键词做子词（如 "5. transshipment" → "transshipment"）
     for kw in _TERM_KEYWORDS:
         if re.search(r'\b' + re.escape(kw) + r'\b', ml):
@@ -53,10 +92,12 @@ def _is_reasonable_price(p):
     """价格应该在一个合理的范围内（不是年份、序号等）"""
     if p is None:
         return False
-    # 排除年份（2024~2029）
-    if 2024 <= p <= 2029:
+    # 排除年份（动态范围：当前年份-3 ~ 当前年份+5）
+    from datetime import datetime
+    this_year = datetime.now().year
+    if this_year - 3 <= p <= this_year + 5 and p == int(p) and 2000 <= p <= 2100:
         return False
-    # 排除纯序号（1~9的整数）
+    # 排除纯序号（1~9的小整数）
     if 1 <= p <= 9 and p == int(p):
         return False
     # 排除极小值
