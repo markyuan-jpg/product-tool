@@ -113,8 +113,9 @@ def _save_image_unique(img_data: bytes, ext: str) -> str:
 
 # ==================== 第1路: openpyxl _images ====================
 
-def _detect_image_column(file_path: str) -> Optional[int]:
-    """从表头行检测产品图片列位置（1-based）"""
+def _detect_image_column(file_path: str) -> list:
+    """从表头行检测所有产品图片列位置（1-based）。返回列号列表。"""
+    image_cols = []
     try:
         from openpyxl import load_workbook
         wb = load_workbook(file_path, data_only=True)
@@ -122,13 +123,13 @@ def _detect_image_column(file_path: str) -> Optional[int]:
             for r in range(1, min(ws.max_row + 1, 5)):
                 for c in range(1, min(ws.max_column + 1, 15)):
                     val = str(ws.cell(r, c).value or '').lower()
-                    if any(kw in val for kw in ['产品图片', '商品图', '产品图', 'picture', '图片']):
-                        wb.close()
-                        return c
+                    if any(kw in val for kw in ['产品图片', '商品图', '产品图', 'picture', 'drawing', '图片', 'image', 'photo']):
+                        if c not in image_cols:
+                            image_cols.append(c)
         wb.close()
     except Exception:
         pass
-    return None
+    return image_cols
 
 
 def _image_col_matches(anchor_col: int, image_col: Optional[int], tolerance: int = 1) -> bool:
@@ -294,7 +295,12 @@ def parse_dispimg_images(file_path: str, image_col: Optional[int] = None) -> Dic
                                     img_data = z.read(media_file)
                                     ext = os.path.splitext(media_file)[1] or '.png'
                                     img_path = _save_image_unique(img_data, ext)
-                                    sheet_images[r] = img_path
+                                    # 同一行可能有多个图片列，用 || 拼接
+                                    if r in sheet_images:
+                                        existing = sheet_images[r]
+                                        sheet_images[r] = existing + '||' + img_path if '||' not in existing else existing
+                                    else:
+                                        sheet_images[r] = img_path
 
                 if sheet_images:
                     result[sheet_name] = sheet_images
@@ -393,7 +399,10 @@ def parse_drawing_images(file_path: str, image_col: Optional[int] = None) -> Dic
                     ext = os.path.splitext(media_name)[1] or '.png'
                     img_path = _save_image_unique(img_data, ext)
 
-                    if row not in sheet_images:
+                    if row in sheet_images:
+                        existing = sheet_images[row]
+                        sheet_images[row] = existing + '||' + img_path if '||' not in existing else existing
+                    else:
                         sheet_images[row] = img_path
 
                 if sheet_images:
@@ -655,11 +664,25 @@ def match_images_to_products(df, file_path: str) -> 'pd.DataFrame':
     if '_row' not in df.columns:
         return df
 
-    # 检测产品图片列，只提取该列的图片（过滤包装图/适合图）
-    image_col = _detect_image_column(file_path)
-    img_map = extract_embedded_images(file_path, image_col=image_col)
-    if not img_map:
+    # 检测所有产品图片列（多个图片列都提取）
+    image_cols = _detect_image_column(file_path)
+    if not image_cols:
         return df
+    
+    # 合并所有图片列的图片（同一行有多列图片时拼接路径）
+    img_map = {}
+    for ic in image_cols:
+        imgs = extract_embedded_images(file_path, image_col=ic)
+        for s_name, s_rows in imgs.items():
+            if s_name not in img_map:
+                img_map[s_name] = {}
+            for r, path in s_rows.items():
+                if r in img_map[s_name]:
+                    # 同行的第二张图片：在已有路径后追加
+                    existing = img_map[s_name][r]
+                    img_map[s_name][r] = existing + '||' + path if '||' not in existing else existing
+                else:
+                    img_map[s_name][r] = path
 
     def _sheet_matches(product_sheet: str, map_sheet: str) -> bool:
         ps = str(product_sheet or '').strip().lower()
