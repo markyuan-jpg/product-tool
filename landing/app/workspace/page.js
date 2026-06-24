@@ -156,12 +156,6 @@ function UploadSection({ onSaveSuccess, user }) {
           className={'px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ' + (inputTab === 'file' ? 'border-[var(--navy)] text-[var(--navy)]' : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--navy)]')}>
           📁 {t('workspace.upload.title', locale)}
         </button>
-        {user?.tier === 'pro' && (
-        <button onClick={() => setInputTab('smartpaste')}
-          className={'px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ' + (inputTab === 'smartpaste' ? 'border-[var(--navy)] text-[var(--navy)]' : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--navy)]')}>
-          📋 {t('workspace.upload.pasteTab', locale)}
-        </button>
-        )}
       </div>
 
       {inputTab === 'file' && (
@@ -191,56 +185,6 @@ function UploadSection({ onSaveSuccess, user }) {
         </div>
       )}
 
-      {inputTab === 'smartpaste' && (
-        <div>
-          {/* Image drop zone */}
-          <div className="mb-4"
-            onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
-            onDrop={handlePasteDrop}>
-            {pasteImages.length === 0 ? (
-              <div onClick={() => pasteInputRef.current?.click()}
-                className="border-2 border-dashed border-[var(--border)] rounded-xl p-6 text-center cursor-pointer hover:border-[var(--navy)] hover:bg-gray-50 transition-colors">
-                <p className="text-sm text-[var(--text-secondary)]">🖼️ {t('workspace.upload.pasteImageDropBefore', locale)}<span className="text-[var(--navy-light)] underline">{t('workspace.upload.pasteImageDropLink', locale)}</span></p>
-                <p className="text-xs text-[var(--text-secondary)] mt-1">{t('workspace.upload.pasteImageHint', locale)}</p>
-                <input ref={pasteInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handlePasteImageSelect} />
-              </div>
-            ) : (
-              <div className="border border-[var(--border)] rounded-xl p-4">
-                <div className="flex flex-wrap gap-3 mb-2">
-                  {pasteImages.map((img, i) => (
-                    <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-[var(--border)]">
-                      <img src={URL.createObjectURL(img)} alt="" className="w-full h-full object-cover" />
-                      <button onClick={() => removePasteImage(i)}
-                        className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center">×</button>
-                    </div>
-                  ))}
-                </div>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => pasteInputRef.current?.click()} className="text-xs text-[var(--navy-light)] underline cursor-pointer">{t('workspace.upload.addMoreImages', locale)}</button>
-                  <span className="text-xs text-[var(--text-secondary)]">{t('workspace.upload.imageCount', locale).replace('{n}', pasteImages.length)}</span>
-                </div>
-                <input ref={pasteInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handlePasteImageSelect} />
-              </div>
-            )}
-          </div>
-
-          {/* Text area */}
-          <div className="mb-4">
-            <textarea value={pasteText} onChange={e => setPasteText(e.target.value)}
-              placeholder={t('workspace.upload.pastePlaceholder', locale)}
-              className="w-full h-56 p-4 text-sm border border-[var(--border)] rounded-xl resize-y focus:outline-none focus:border-[var(--navy)] placeholder:text-[var(--border)]" />
-          </div>
-
-          {/* Parse button */}
-          <div className="flex items-center gap-3">
-            <button onClick={handlePasteParse} disabled={pasting || !pasteText.trim()}
-              className="px-6 py-2.5 rounded-lg bg-[var(--navy)] text-white text-sm font-medium hover:bg-[var(--navy-light)] disabled:opacity-50 cursor-pointer">
-              {pasting ? t('workspace.upload.pasting', locale) : t('workspace.upload.pasteBtn', locale)}
-            </button>
-            {pasteError && <span className="text-sm text-[var(--error)]">{pasteError}</span>}
-          </div>
-        </div>
-      )}
       {products.length > 0 && (
         <div className="mt-6 border border-[var(--border)] rounded-xl bg-[var(--surface)] overflow-hidden">
           <div className="px-5 py-3 border-b border-[var(--border)] flex items-center justify-between">
