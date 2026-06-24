@@ -246,7 +246,7 @@ async def session_middleware(request: Request, call_next):
             key="session_id",
             value=session_id,
             httponly=True,
-            secure=False,
+            secure=request.url.scheme == "https",  # HTTPS 时启用 Secure
             samesite="lax",
             max_age=365 * 24 * 3600,
         )
