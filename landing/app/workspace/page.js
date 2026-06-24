@@ -18,13 +18,9 @@ export default function WorkspacePage() {
   const [quotationRefreshKey, setQuotationRefreshKey] = useState(0);
 
   useEffect(() => {
-    const u = getStoredUser();
-    if (!u || !isLoggedIn()) { router.push('/login'); return; }
-    setUser(u);
-    fetch(`${API_BASE}/api/user/usage`, {
-      headers: { 'Authorization': `Bearer ${getToken()}` }
-    }).then(r => r.json()).then(setUsage).catch(() => {});
-  }, [router]);
+    // 匿名模式：无需登录，直接进入工作台
+    setUser({ username: 'guest', tier: 'pro' });
+  }, []);
 
   const usagePercent = usage ? Math.min(100, Math.round((usage.upload_count / usage.limit) * 100)) : 0;
 
