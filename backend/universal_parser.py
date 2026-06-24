@@ -507,12 +507,16 @@ def extract_multi_kv_products(ws, header_row: int) -> pd.DataFrame:
 # ─── 表格提取 ───
 
 def _get_cell_val(ws, r, c, _cm):
-    """获取单元格值（支持合并单元格传播）。_cm 为 _build_merge_map 返回的 cell_map。"""
+    """获取单元格值 — 优先取实际值，合并传播只在有实际值的前提下生效（避免空行泄漏）"""
+    actual = ws.cell(r, c).value
+    if actual is not None:
+        return actual
+    # 合并传播值 — 但仅当本行的其他列有实际数据时才用（避免空行被合并值填满）
     if _cm:
         val = _cm.get((r, c))
         if val is not None:
             return val
-    return ws.cell(r, c).value
+    return None
 
 
 def _build_merge_map(ws):
@@ -587,11 +591,9 @@ def _is_product_row(first_cell: str, qty_val, price_val) -> bool:
     # 型号模式：字母+数字
     if re.search(r'[A-Za-z]+\d+', first_cell) and len(first_cell) < 40:
         # 额外检查：如果是订单号/合同号风格（字母部分在头部，然后是数字），过滤
-        # 如 "PO20250516", "CT20250516", "INV20250516"
-        if re.match(r'^[A-Za-z]{2,4}[\d\-]{6,15}$', first_cell) and len(first_cell) <= 20:
-            # 可能: "PO20250516" -> 这是订单号，不是产品。只有短型号才放过（≤12字符）
-            if len(first_cell) > 12:
-                return False
+        # 只匹配已知的文档前缀：PO/SO/CO/DO/WO/IV/INV/CT/CN/QT/RFQ/PI/DN/GRN
+        if re.match(r'^(PO|SO|CO|DO|WO|IV|INV|CT|CN|QT|RFQ|PI|DN|GRN)[\d\-]{6,15}$', first_cell, re.I):
+            return False
         return True
     # 有价格（用 clean_price_text 支持 '0.15/片'）
     clean_p = clean_price_text(price_val)
