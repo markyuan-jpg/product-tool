@@ -1,17 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { isLoggedIn, getStoredUser, clearAuth } from '@/lib/auth';
 import { useLocale, t } from '@/lib/i18n';
 import LocaleToggle from '@/components/LocaleToggle';
 
 export default function Nav({ current = '' }) {
-  const [authUser, setAuthUser] = useState(null);
   const { locale, ready } = useLocale();
-
-  useEffect(() => {
-    if (isLoggedIn()) setAuthUser(getStoredUser());
-  }, []);
 
   const linkClass = (page) =>
     `text-sm transition-colors ${
@@ -34,35 +27,9 @@ export default function Nav({ current = '' }) {
         <a href="/how-it-works" className={linkClass('how-it-works')}>
           {t('nav.howItWorks', locale)}
         </a>
-        <a href="/pricing" className={linkClass('pricing')}>
-          {t('nav.pricing', locale)}
+        <a href="/workspace" className={linkClass('workspace')}>
+          {t('nav.workspace', locale)}
         </a>
-        {authUser ? (
-          <>
-            <a href="/workspace" className={linkClass('workspace')}>
-              {t('nav.workspace', locale)}
-            </a>
-            <a
-              href="/account"
-              className="text-[var(--navy)] font-medium text-sm"
-            >
-              {authUser.username}
-            </a>
-            <button
-              onClick={() => { clearAuth(); setAuthUser(null); }}
-              className="text-[var(--text-secondary)] hover:text-[var(--error)] transition-colors cursor-pointer text-sm"
-            >
-              {t('nav.logout', locale)}
-            </button>
-          </>
-        ) : (
-          <a
-            href="/login"
-            className="px-3 py-1.5 rounded-lg bg-[var(--navy)] text-white text-xs font-medium hover:bg-[var(--navy-light)] transition-colors"
-          >
-            {t('nav.login', locale)}
-          </a>
-        )}
         <LocaleToggle />
       </div>
     </nav>

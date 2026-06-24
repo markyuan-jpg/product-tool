@@ -45,20 +45,6 @@ export default function WorkspacePage() {
   return (
     <div className="min-h-screen bg-[var(--bg)]">
       <Nav />
-      {user && user.tier !== 'pro' && usage && (
-        <div className="bg-amber-50 border-b border-amber-200">
-          <div className="max-w-6xl mx-auto px-4 py-2 flex items-center gap-3 text-xs">
-            <span className="text-amber-700 font-medium">{t('workspace.usage.free', locale)}</span>
-            <div className="flex-1 max-w-xs h-2 bg-amber-200 rounded-full overflow-hidden">
-              <div className="h-full bg-amber-500 rounded-full transition-all" style={{width: usagePercent + '%'}} />
-            </div>
-            <span className="text-amber-600">
-              {t('workspace.usage.uploadCount', locale).replace('{uploadCount}', usage.upload_count).replace('{limit}', usage.limit)} | {t('workspace.usage.productCount', locale).replace('{productCount}', usage.product_count || 0).replace('{productLimit}', usage.product_limit || 200)}
-            </span>
-            <a href="/pricing" className="ml-auto text-amber-700 font-medium hover:underline">{t('workspace.usage.upgrade', locale)}</a>
-          </div>
-        </div>
-      )}
       <main className="max-w-6xl mx-auto px-4 py-8 space-y-8">
         <UploadSection onSaveSuccess={() => setProductRefreshKey(k => k + 1)} user={user} />
         <ProductLibrarySection refreshKey={productRefreshKey} user={user} onQuotationGenerated={() => setQuotationRefreshKey(k => k + 1)} />
@@ -72,7 +58,7 @@ export default function WorkspacePage() {
 function UploadSection({ onSaveSuccess, user }) {
   const { locale } = useLocale();
   const [inputTab, setInputTab2] = useState('file');
-  const setInputTab = (tab) => { if (tab === 'smartpaste' && user?.tier !== 'pro') return; setInputTab2(tab); };
+  const setInputTab = (tab) => setInputTab2(tab);
   const [dragOver, setDragOver] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState(null);
