@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-import os, sys, json, re, logging
+import os, sys, json, re, uuid, logging
 import asyncio
 import functools
 import sqlite3
@@ -229,6 +229,29 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ─── 匿名会话中间件 ───
+# 每个访问者自动获得一个 session_id cookie（UUID），无需注册登录。
+# 产品库/报价历史按 session_id 关联，清 cookie 则数据丢失。
+
+@app.middleware("http")
+async def session_middleware(request: Request, call_next):
+    session_id = request.cookies.get("session_id")
+    if not session_id:
+        session_id = uuid.uuid4().hex
+    # 存到 request.state，供 get_session_id 依赖读取
+    request.state.session_id = session_id
+    response = await call_next(request)
+    if not request.cookies.get("session_id"):
+        response.set_cookie(
+            key="session_id",
+            value=session_id,
+            httponly=True,
+            secure=False,
+            samesite="lax",
+            max_age=365 * 24 * 3600,
+        )
+    return response
+
 
 # CORS 异常处理:确保错误响应也包含跨域头
 @app.exception_handler(Exception)
@@ -282,13 +305,48 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 
-#  Auth (must be before payment — used in Depends())
+# ─── 匿名会话：不再需要登录，自动获得 session ID ───
+# 所有功能对匿名用户开放，tier 固定为 'pro'
 
-from auth import (
-    hash_password, verify_password, create_access_token, create_refresh_token,
-    get_current_user, get_current_user_optional, require_pro,
-    get_user_by_username
-)
+class GuestUser:
+    """模拟 User 对象，所有功能对匿名用户开放"""
+    def __init__(self, session_id: str):
+        self.id = session_id
+        self.username = "guest"
+        self.email = ""
+        self.tier = "pro"
+        self.upload_count = 0
+        self.upload_month = ""
+        self.subscription_id = None
+        self.subscription_end = None
+
+async def get_session_id(request: Request) -> GuestUser:
+    """匿名会话依赖 — FastAPI Depends 用"""
+    sid = getattr(request.state, 'session_id', 'anonymous')
+    return GuestUser(sid)
+
+
+def _guest_or_none(request: Request):
+    """兼容旧 get_current_user_optional — 总是返回 GuestUser"""
+    return getattr(request.state, 'session_id', 'guest')
+
+# 兼容旧代码的别名
+get_current_user = get_session_id
+get_current_user_optional = get_session_id
+
+# require_pro 改为空操作（所有用户都是 Pro）
+def require_pro(user):
+    pass
+
+# 兼容旧代码的上传限制
+async def check_upload_limit(user, db):
+    return True  # 无限制
+
+async def increment_upload(user, db):
+    pass  # 不计数
+
+# Auth imports for dormant login/register endpoints
+from auth import hash_password, verify_password, create_access_token, create_refresh_token, get_user_by_username
 from sqlalchemy.ext.asyncio import AsyncSession
 from database import get_session, User
 from sqlalchemy import select
@@ -300,7 +358,7 @@ from payment import create_checkout_session, verify_webhook, handle_webhook_even
 
 @app.post("/api/payment/create-checkout")
 
-async def payment_checkout(user: User = Depends(get_current_user)):
+async def payment_checkout(user: User = Depends(get_session_id)):
     """Create Creem checkout session for Pro upgrade."""
     result = create_checkout_session(
         user_id=user.id,
@@ -471,7 +529,7 @@ async def login(
 
 @app.get("/api/user/me")
 
-async def user_me(user: User = Depends(get_current_user)):
+async def user_me(user: User = Depends(get_session_id)):
     return {
         "id": user.id, "username": user.username, "tier": user.tier,
         "upload_count": user.upload_count, "email": user.email or ''
@@ -480,7 +538,7 @@ async def user_me(user: User = Depends(get_current_user)):
 
 @app.get("/api/user/usage")
 
-async def user_usage(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+async def user_usage(user: User = Depends(get_session_id), db: AsyncSession = Depends(get_session)):
     from sqlalchemy import func, select
     from database import Product
     product_count = 0
@@ -523,7 +581,7 @@ async def refresh_token(request: Request, db: AsyncSession = Depends(get_session
 async def change_password(
     old_password: str = Form(...),
     new_password: str = Form(...),
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_session_id),
     db: AsyncSession = Depends(get_session),
 ):
     if len(new_password) < 6:
@@ -831,7 +889,7 @@ def _extract_packaging_from_spec(spec_zh: str) -> dict:
 
 @app.post("/api/products/save")
 
-async def save_products(products: str = Form(...), user: dict = Depends(get_current_user)):
+async def save_products(products: str = Form(...), user: dict = Depends(get_session_id)):
 
     items = json.loads(products)
 
@@ -865,7 +923,7 @@ async def save_products(products: str = Form(...), user: dict = Depends(get_curr
 
 @app.get("/api/products")
 
-async def get_products(user: dict = Depends(get_current_user)):
+async def get_products(user: dict = Depends(get_session_id)):
 
     from product_repo import get_products
     return get_products(user.id)
@@ -873,7 +931,7 @@ async def get_products(user: dict = Depends(get_current_user)):
 
 @app.delete("/api/products/{product_id}")
 
-async def delete_product(product_id: int, user: dict = Depends(get_current_user)):
+async def delete_product(product_id: int, user: dict = Depends(get_session_id)):
 
     from product_repo import delete_product as repo_delete
     repo_delete(product_id, user.id)
@@ -882,7 +940,7 @@ async def delete_product(product_id: int, user: dict = Depends(get_current_user)
 
 @app.post("/api/products/batch-delete")
 
-async def batch_delete_products(product_ids: str = Form(...), user: dict = Depends(get_current_user)):
+async def batch_delete_products(product_ids: str = Form(...), user: dict = Depends(get_session_id)):
 
     ids = json.loads(product_ids)
     from product_repo import batch_delete_products as repo_batch_delete
@@ -894,7 +952,7 @@ async def batch_delete_products(product_ids: str = Form(...), user: dict = Depen
 
 @app.get("/api/quotations")
 
-async def get_quotations(user: dict = Depends(get_current_user)):
+async def get_quotations(user: dict = Depends(get_session_id)):
 
     from product_repo import get_quotations
     rows = get_quotations(user.id)
@@ -1109,7 +1167,7 @@ async def upload_template(file: UploadFile = File(...)):
 
 @app.post("/api/template/save")
 
-async def save_template(config: str = Form(...), user: dict = Depends(get_current_user)):
+async def save_template(config: str = Form(...), user: dict = Depends(get_session_id)):
     global _COMPANY_CACHE
 
     data = json.loads(config)
@@ -1142,7 +1200,7 @@ async def save_template(config: str = Form(...), user: dict = Depends(get_curren
 
 @app.get("/api/template")
 
-async def get_template(user: dict = Depends(get_current_user)):
+async def get_template(user: dict = Depends(get_session_id)):
 
     cfg = _load_company_config()
 
@@ -1170,7 +1228,7 @@ LOGO_DIR.mkdir(exist_ok=True)
 
 @app.post("/api/company/logo")
 
-async def upload_logo(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
+async def upload_logo(file: UploadFile = File(...), user: dict = Depends(get_session_id)):
     global _COMPANY_CACHE
 
     ext = Path(file.filename).suffix.lower()
@@ -1217,7 +1275,7 @@ async def save_bank_info(
     bank_address: str = Form(""),
     account_no: str = Form(""),
     swift_code: str = Form(""),
-    user: User = Depends(get_current_user)):
+    user: User = Depends(get_session_id)):
     os.makedirs(os.path.dirname(BANK_INFO_FILE), exist_ok=True)
     data = {
         "beneficiary": beneficiary,
@@ -1231,7 +1289,7 @@ async def save_bank_info(
     return {"status": "ok"}
 
 @app.get("/api/bank/load")
-async def load_bank_info(user: User = Depends(get_current_user)):
+async def load_bank_info(user: User = Depends(get_session_id)):
     try:
         with open(BANK_INFO_FILE, "r") as f:
             return json.load(f)
@@ -1247,7 +1305,7 @@ async def parse_file(
     request: Request,
     file: UploadFile = File(...),
 
-    user: User = Depends(get_current_user_optional),
+    user: User = Depends(get_session_id),
     db: AsyncSession = Depends(get_session)):
 
     ext = Path(file.filename).suffix.lower()
@@ -1259,7 +1317,6 @@ async def parse_file(
 
     # Free user upload limit check (only for logged-in users)
     if user:
-        from auth import check_upload_limit
         if not await check_upload_limit(user, db):
             raise HTTPException(403, "Free users limited to 20 uploads/month. Upgrade Pro to remove limit.")
 
@@ -1414,7 +1471,6 @@ async def parse_file(
 
         # 上传成功计数（仅登录用户）
         if user:
-            from auth import increment_upload
             await increment_upload(user, db)
 
         
@@ -1445,7 +1501,7 @@ async def parse_file(
 
 @app.post("/api/parse/with-ai")
 
-async def parse_with_ai(file: UploadFile = File(...), ai_backend: str = Form("gemini"), user: dict = Depends(get_current_user_optional)):
+async def parse_with_ai(file: UploadFile = File(...), ai_backend: str = Form("gemini"), user: dict = Depends(get_session_id)):
 
     ext = Path(file.filename).suffix.lower()
 
@@ -1577,11 +1633,8 @@ async def parse_with_ai(file: UploadFile = File(...), ai_backend: str = Form("ge
 
 @app.post("/api/parse-text-products")
 
-async def parse_text_products(data: dict = Body(...), user: User = Depends(get_current_user_optional)):
-    """从自由文本中提取结构化产品（智能粘贴功能 — 仅 Pro）"""
-    if not user:
-        raise HTTPException(401, "请先登录")
-    require_pro(user)
+async def parse_text_products(data: dict = Body(...), user: GuestUser = Depends(get_session_id)):
+    """智能粘贴 — 对所有匿名用户开放"""
     text = data.get('text', '')
     if not text or not text.strip():
         return {"products": [], "count": 0}
@@ -1603,7 +1656,7 @@ TEMPLATE_DIR.mkdir(parents=True, exist_ok=True)
 
 @app.post("/api/template/document/{doc_type}")
 
-async def upload_doc_template(doc_type: str, file: UploadFile = File(...), user: dict = Depends(get_current_user)):
+async def upload_doc_template(doc_type: str, file: UploadFile = File(...), user: dict = Depends(get_session_id)):
 
     if doc_type not in ('quotation', 'pi', 'packing', 'invoice'):
 
@@ -1641,7 +1694,7 @@ async def get_doc_template(doc_type: str):
 
 @app.delete("/api/template/document/{doc_type}")
 
-async def delete_doc_template(doc_type: str, user: dict = Depends(get_current_user)):
+async def delete_doc_template(doc_type: str, user: dict = Depends(get_session_id)):
 
     if doc_type not in ('quotation', 'pi', 'packing', 'invoice'):
 
@@ -1693,7 +1746,7 @@ async def generate_quotation(
 
     db: AsyncSession = Depends(get_session),
 
-    authorization: str = Header(None)):
+    user: GuestUser = Depends(get_session_id)):
 
     
     import pandas as pd
@@ -1813,9 +1866,8 @@ async def generate_quotation(
             try: os.unlink(_tf)
             except OSError: pass
 
-    # Auto-save to quotation history if user is logged in
+    # Auto-save to quotation history
     quotation_id = None
-    user = await get_current_user_optional(authorization, db)
     if user:
         try: 
             from product_repo import save_quotation
@@ -1839,7 +1891,7 @@ async def generate_quotation(
 
 @app.get("/api/quotations/{id}/download")
 
-async def download_quotation(id: int, user: dict = Depends(get_current_user)):
+async def download_quotation(id: int, user: dict = Depends(get_session_id)):
 
     from product_repo import get_quotation
     row = get_quotation(id, user.id)
@@ -1861,7 +1913,7 @@ async def download_quotation(id: int, user: dict = Depends(get_current_user)):
 
 @app.delete("/api/quotations/{id}")
 
-async def delete_quotation(id: int, user: dict = Depends(get_current_user)):
+async def delete_quotation(id: int, user: dict = Depends(get_session_id)):
 
     from product_repo import delete_quotation as repo_delete_q
     file_path = repo_delete_q(id, user.id)
@@ -1877,7 +1929,7 @@ async def delete_quotation(id: int, user: dict = Depends(get_current_user)):
 
 @app.post("/api/quotations/batch-delete")
 
-async def batch_delete_quotations(ids: str = Form(...), user: dict = Depends(get_current_user)):
+async def batch_delete_quotations(ids: str = Form(...), user: dict = Depends(get_session_id)):
 
     id_list = json.loads(ids)
 
@@ -1912,7 +1964,7 @@ async def generate_quotation_pdf(
 
     db: AsyncSession = Depends(get_session),
 
-    authorization: str = Header(None)):
+    user: GuestUser = Depends(get_session_id)):
 
     items = json.loads(products)
 
@@ -1961,7 +2013,7 @@ async def generate_pi(
     bank_info: str = Form(""),
     db: AsyncSession = Depends(get_session),
 
-    user: User = Depends(get_current_user)):
+    user: User = Depends(get_session_id)):
     # Pro 功能校验
     require_pro(user)
 
@@ -1974,6 +2026,30 @@ async def generate_pi(
     # 从统一公司信息配置加载卖家信息
 
     seller_config = _load_company_config()
+
+    # Parse buyer_info JSON
+    buyer_name = ""
+    buyer_address = ""
+    if buyer_info:
+        try:
+            bi = json.loads(buyer_info)
+            buyer_name = bi.get('name', '')
+            buyer_address = bi.get('address', '')
+        except Exception:
+            pass
+
+    # Parse bank_info for beneficiary details
+    bank_beneficiary = ""
+    bank_name = ""
+    bank_account = ""
+    if bank_info:
+        try:
+            bi = json.loads(bank_info)
+            bank_beneficiary = bi.get('beneficiary', '')
+            bank_name = bi.get('bank_name', '')
+            bank_account = bi.get('account_no', '')
+        except Exception:
+            pass
 
     if bank_beneficiary:
 
@@ -2075,18 +2151,13 @@ async def generate_packing(
 
     db: AsyncSession = Depends(get_session),
 
-    authorization: str = Header(None),
+    user: GuestUser = Depends(get_session_id),
 
 ):
 
 
 
-    # Pro 功能校验
-    _pro_user = await get_current_user_optional(authorization, db)
-    if not _pro_user:
-        raise HTTPException(401, "请先登录")
-    require_pro(_pro_user)
-
+    # 所有功能已对匿名用户开放
     items = json.loads(products)
 
     if not items:
@@ -2176,18 +2247,13 @@ async def generate_invoice(
 
     db: AsyncSession = Depends(get_session),
 
-    authorization: str = Header(None),
+    user: GuestUser = Depends(get_session_id),
 
 ):
 
 
 
-    # Pro 功能校验
-    _pro_user = await get_current_user_optional(authorization, db)
-    if not _pro_user:
-        raise HTTPException(401, "请先登录")
-    require_pro(_pro_user)
-
+    # 所有功能已对匿名用户开放
     items = json.loads(products)
 
     if not items:
