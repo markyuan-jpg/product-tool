@@ -285,7 +285,7 @@ def parse_dispimg_images(file_path: str, image_col: Optional[int] = None) -> Dic
                         cell_col = _cell_ref_to_col(cell_ref) if cell_ref else None
                         f = c.find('{http://schemas.openxmlformats.org/spreadsheetml/2006/main}f')
                         if f is not None and f.text and 'DISPIMG' in f.text.upper():
-                            if not _image_col_matches(cell_col, image_col):
+                            if not _image_col_matches(cell_col, image_col, tolerance=0):
                                 continue
                             m = re.search(r'"([^"]+)"', f.text)
                             if m:
@@ -381,7 +381,7 @@ def parse_drawing_images(file_path: str, image_col: Optional[int] = None) -> Dic
                         continue
                     col_el = from_elem.find('xdr:col', DRAWING_NS)
                     anchor_col = (int(col_el.text) + 1) if col_el is not None else None
-                    if not _image_col_matches(anchor_col, image_col):
+                    if not _image_col_matches(anchor_col, image_col, tolerance=0):
                         continue
                     
                     blip = anchor.find('.//a:blip', DRAWING_NS)
