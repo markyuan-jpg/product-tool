@@ -76,7 +76,7 @@ function UploadSection({ onSaveSuccess, user }) {
     try {
       const fd = new FormData(); fd.append('file', file);
       const ac = new AbortController(); const tid = setTimeout(() => ac.abort(), 120000);
-      const res = await fetch(API_BASE + '/api/parse', { method: 'POST', body: fd, signal: ac.signal, headers: {} });
+      const res = await fetch(API_BASE + '/api/parse', { method: 'POST', body: fd, signal: ac.signal, headers: {}, credentials: 'include' });
       clearTimeout(tid);
       if (!res.ok) { const e = await res.json().catch(() => ({ detail: t('workspace.upload.parseError', locale) })); throw new Error(e.detail || t('workspace.upload.serverError', locale)); }
       const d = await res.json(); setProducts(d.products || []);
@@ -100,7 +100,7 @@ function UploadSection({ onSaveSuccess, user }) {
     setSaving(true); setSaveMsg(null);
     try {
       const b = new URLSearchParams(); b.append('products', JSON.stringify(products));
-      const r = await fetch(API_BASE + '/api/products/save', { method: 'POST', headers: {}, body: b });
+      const r = await fetch(API_BASE + '/api/products/save', { method: 'POST', headers: {}, credentials: 'include', body: b });
       if (!r.ok) throw new Error(t('workspace.upload.saveFailed', locale));
       setSaveMsg('success'); setProducts([]);
       if (onSaveSuccess) onSaveSuccess();
@@ -323,7 +323,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
     setLoading(true);
     try {
       const ac = new AbortController(); const tid = setTimeout(() => ac.abort(), 30000);
-      const r = await fetch(API_BASE + '/api/products', { signal: ac.signal, headers: {} });
+      const r = await fetch(API_BASE + '/api/products', { signal: ac.signal, headers: {}, credentials: 'include' });
       clearTimeout(tid);
       if (!r.ok) throw new Error(t('workspace.upload.fetchFailed', locale));
       const d = await r.json(); setProducts(d.products || []); setTotal(d.total || 0);
@@ -380,7 +380,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
   const handleDelete = async (id) => {
     if (!confirm(t('workspace.productLib.confirmDelete', locale))) return;
     try {
-      const r = await fetch(API_BASE + '/api/products/' + id, { method: 'DELETE', headers: {} });
+      const r = await fetch(API_BASE + '/api/products/' + id, { method: 'DELETE', headers: {}, credentials: 'include' });
       if (!r.ok) throw new Error(t('workspace.productLib.deleteFailed', locale));
       fetchProducts();
     } catch (err) { alert(t('workspace.productLib.deleteFailed', locale) + '：' + friendlyError(err)); }
@@ -469,7 +469,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
         b.append('payment_terms', piPaymentTerms);
         b.append('currency', piCurrency);
         try {
-          const bankRes = await fetch(API_BASE + '/api/bank/load', { headers: {} });
+          const bankRes = await fetch(API_BASE + '/api/bank/load', { headers: {}, credentials: 'include' });
           if (bankRes.ok) {
             const bank = await bankRes.json();
             if (bank.beneficiary) b.append('bank_beneficiary', bank.beneficiary);
@@ -510,7 +510,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
         const data = await r.json();
         if (data.id) {
           const dlR = await fetch(API_BASE + '/api/quotations/' + data.id + '/download', {
-            headers: {}
+            headers: {}, credentials: 'include'
           });
           if (dlR.ok) {
             const blob = await dlR.blob();
@@ -617,7 +617,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
         if (item.id) {
           try {
             const dlR = await fetch(API_BASE + '/api/quotations/' + item.id + '/download', {
-              headers: {}
+              headers: {}, credentials: 'include'
             });
             if (dlR.ok) {
               const blob = await dlR.blob();
@@ -1152,7 +1152,7 @@ function QuotationHistorySection({ refreshKey }) {
     setLoading(true);
     try {
       const ac = new AbortController(); const tid = setTimeout(() => ac.abort(), 30000);
-      const r = await fetch(API_BASE + '/api/quotations', { signal: ac.signal, headers: {} });
+      const r = await fetch(API_BASE + '/api/quotations', { signal: ac.signal, headers: {}, credentials: 'include' });
       clearTimeout(tid);
       if (!r.ok) throw new Error(t('workspace.quotationHistory.downloadFailed', locale));
       const d = await r.json(); setQuotations(d.quotations || []);
@@ -1176,7 +1176,7 @@ function QuotationHistorySection({ refreshKey }) {
 
   const handleDownload = async (id) => {
     try {
-      const r = await fetch(API_BASE + '/api/quotations/' + id + '/download', { headers: {} });
+      const r = await fetch(API_BASE + '/api/quotations/' + id + '/download', { headers: {}, credentials: 'include' });
       if (!r.ok) throw new Error(t('workspace.quotationHistory.downloadFailed', locale));
       const blob = await r.blob();
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
@@ -1189,7 +1189,7 @@ function QuotationHistorySection({ refreshKey }) {
   const handleDelete = async (id) => {
     if (!confirm(t('workspace.quotationHistory.confirmDelete', locale))) return;
     try {
-      const r = await fetch(API_BASE + '/api/quotations/' + id, { method: 'DELETE', headers: {} });
+      const r = await fetch(API_BASE + '/api/quotations/' + id, { method: 'DELETE', headers: {}, credentials: 'include' });
       if (!r.ok) throw new Error(t('workspace.quotationHistory.deleteFailed', locale));
       fetchQuotations();
     } catch (err) { alert(t('workspace.quotationHistory.deleteFailed', locale) + '：' + friendlyError(err)); }
