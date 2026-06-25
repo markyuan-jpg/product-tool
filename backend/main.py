@@ -230,24 +230,27 @@ app.add_middleware(
 )
 
 # ─── 匿名会话中间件 ───
-# 每个访问者自动获得一个 session_id cookie（UUID），无需注册登录。
-# 产品库/报价历史按 session_id 关联，清 cookie 则数据丢失。
+# 优先读 X-Session-ID header（前端 localStorage），兜底用 cookie
+# 解决跨子域 cookie 不发送的问题
 
 @app.middleware("http")
 async def session_middleware(request: Request, call_next):
-    session_id = request.cookies.get("session_id")
+    # 优先从 X-Session-ID 取（前端存 localStorage 发送）
+    session_id = request.headers.get("X-Session-ID")
+    if not session_id:
+        session_id = request.cookies.get("session_id")
     if not session_id:
         session_id = uuid.uuid4().hex
-    # 存到 request.state，供 get_session_id 依赖读取
     request.state.session_id = session_id
     response = await call_next(request)
-    if not request.cookies.get("session_id"):
+    # 如果都没有，设 cookie 兜底
+    if not request.cookies.get("session_id") and not request.headers.get("X-Session-ID"):
         response.set_cookie(
             key="session_id",
             value=session_id,
             httponly=True,
             secure=request.url.scheme == "https",
-            samesite="none" if request.url.scheme == "https" else "lax",  # 跨子域需 none
+            samesite="none" if request.url.scheme == "https" else "lax",
             max_age=365 * 24 * 3600,
             domain=".quoteflow.it.com" if "quoteflow" in str(request.url.hostname) else None,
         )
