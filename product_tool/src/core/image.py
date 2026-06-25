@@ -285,8 +285,6 @@ def parse_dispimg_images(file_path: str, image_col: Optional[int] = None) -> Dic
                         cell_col = _cell_ref_to_col(cell_ref) if cell_ref else None
                         f = c.find('{http://schemas.openxmlformats.org/spreadsheetml/2006/main}f')
                         if f is not None and f.text and 'DISPIMG' in f.text.upper():
-                            if not _image_col_matches(cell_col, image_col, tolerance=0):
-                                continue
                             m = re.search(r'"([^"]+)"', f.text)
                             if m:
                                 guid = m.group(1)
