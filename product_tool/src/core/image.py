@@ -435,27 +435,37 @@ def extract_embedded_images(file_path: str, image_col: Optional[int] = None) -> 
 
     result = {}
 
+    # 辅助：将 rows 合并到 result，同行多图用 || 拼接
+    def _merge_rows(rows_dict, target):
+        for s, rows in rows_dict.items():
+            if s not in target:
+                target[s] = {}
+            for row, path in rows.items():
+                if row in target[s]:
+                    existing = target[s][row]
+                    # 避免重复拼接同一路径
+                    all_existing = set(existing.split('||'))
+                    all_new = set(path.split('||'))
+                    combined = '||'.join(all_existing | all_new)
+                    target[s][row] = combined
+                else:
+                    target[s][row] = path
+
     try:
         r1 = extract_openpyxl_images(file_path, image_col=image_col)
-        for s, rows in r1.items():
-            result.setdefault(s, {}).update(rows)
+        _merge_rows(r1, result)
     except Exception:
         pass
 
     try:
         r2 = parse_dispimg_images(file_path, image_col=image_col)
-        for s, rows in r2.items():
-            result.setdefault(s, {}).update(rows)
+        _merge_rows(r2, result)
     except Exception:
         pass
 
     try:
         r3 = parse_drawing_images(file_path, image_col=image_col)
-        for s, rows in r3.items():
-            existing = result.get(s, {})
-            for row, path in rows.items():
-                if row not in existing:
-                    result.setdefault(s, {})[row] = path
+        _merge_rows(r3, result)
     except Exception:
         pass
 
