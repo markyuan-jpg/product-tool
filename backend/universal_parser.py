@@ -310,6 +310,17 @@ def map_columns(ws, header_row: int) -> dict:
         # 跳过图片/序号列
         if any(sk in val for sk in SKIP_COLUMN_SIGNALS):
             continue
+        # 内容检测：跳过公式列（DISPIMG 等嵌入图片列）— 不依赖表头关键词
+        formula_count = 0
+        data_count = 0
+        for r in range(header_row + 1, min(header_row + 16, ws.max_row + 1)):
+            cv = str(ws.cell(r, c).value or '').strip()
+            if cv:
+                data_count += 1
+                if cv.startswith('='):
+                    formula_count += 1
+        if data_count >= 3 and formula_count >= data_count * 0.5:
+            continue  # ≥50% 公式 → 跳过
         for key in _COLUMN_ORDER:
             signals = COLUMN_SIGNALS.get(key, [])
             k = key + '_col'
