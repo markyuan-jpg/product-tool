@@ -16,7 +16,7 @@ def _is_sqlite() -> bool:
     return DATABASE_URL.startswith('sqlite')
 
 def _get_sqlite_conn():
-    """Open raw sqlite3 connection to products.db."""
+    """Open raw sqlite3 connection to products.db. Auto-create tables if missing."""
     import sqlite3
     _DEFAULT_DB = Path.home() / ".product_tool" / "products.db"
     db_path = Path(os.environ.get("PRODUCT_TOOL_DB_PATH", str(_DEFAULT_DB)))
@@ -25,6 +25,24 @@ def _get_sqlite_conn():
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS web_products (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL, model TEXT, name_zh TEXT, spec_zh TEXT,
+            price_rmb REAL, image_path TEXT, category TEXT, currency TEXT,
+            carton_size TEXT, gross_weight REAL, net_weight REAL, cbm REAL,
+            units_per_carton INTEGER, packing_type TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            price_cny REAL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS web_quotations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL, product_ids TEXT, file_name TEXT,
+            file_path TEXT DEFAULT '', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
     return conn
 
 def _get_pg_session():

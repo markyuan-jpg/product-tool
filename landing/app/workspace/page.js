@@ -364,7 +364,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
       const b = new URLSearchParams(); b.append('product_ids', JSON.stringify(Array.from(selected)));
       const r = await fetch(API_BASE + '/api/products/batch-delete', {
         method: 'POST', body: b,
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        headers: { ...SID(), 'Content-Type': 'application/x-www-form-urlencoded' }
       });
       if (!r.ok) throw new Error(t('workspace.productLib.deleteFailed', locale));
       setSelected(new Set()); fetchProducts();
@@ -495,7 +495,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
       const tid = setTimeout(() => ac.abort(), 120000);
       const r = await fetch(url, {
         method: 'POST', body: b, signal: ac.signal,
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        headers: { ...SID(), 'Content-Type': 'application/x-www-form-urlencoded' }
       });
       clearTimeout(tid);
       if (!r.ok) throw new Error(t('workspace.upload.generateFailed', locale));
@@ -589,7 +589,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
           const tid2 = setTimeout(() => ac.abort(), 120000);
           const r = await fetch(task.url, {
             method: 'POST', body: task.build(), signal: ac.signal,
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+            headers: { ...SID(), 'Content-Type': 'application/x-www-form-urlencoded' }
           });
           clearTimeout(tid2);
           if (r.ok) {
@@ -1177,7 +1177,7 @@ function QuotationHistorySection({ refreshKey }) {
       b.append('ids', JSON.stringify(Array.from(selectedIds)));
       const r = await fetch(API_BASE + '/api/quotations/batch-delete', {
         method: 'POST', body: b,
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        headers: { ...SID(), 'Content-Type': 'application/x-www-form-urlencoded' }
       });
       if (!r.ok) throw new Error(t('workspace.quotationHistory.deleteFailed', locale));
       fetchQuotations();
@@ -1193,7 +1193,7 @@ function QuotationHistorySection({ refreshKey }) {
       b.append('ids', JSON.stringify(ids));
       const r = await fetch(API_BASE + '/api/quotations/batch-delete', {
         method: 'POST', body: b,
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        headers: { ...SID(), 'Content-Type': 'application/x-www-form-urlencoded' }
       });
       if (!r.ok) throw new Error(t('workspace.quotationHistory.deleteFailed', locale));
       fetchQuotations();
