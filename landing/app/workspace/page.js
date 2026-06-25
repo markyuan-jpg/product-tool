@@ -30,20 +30,6 @@ export default function WorkspacePage() {
     setUser({ username: 'guest', tier: 'pro' });
   }, []);
 
-  const usagePercent = usage ? Math.min(100, Math.round((usage.upload_count / usage.limit) * 100)) : 0;
-
-  // Onboarding — show on first workspace visit
-  const [showOnboarding, setShowOnboarding] = useState(false);
-  useEffect(() => {
-    if (typeof window !== 'undefined' && !localStorage.getItem('onboarding_dismissed')) {
-      setShowOnboarding(true);
-    }
-  }, []);
-  const dismissOnboarding = () => {
-    localStorage.setItem('onboarding_dismissed', '1');
-    setShowOnboarding(false);
-  };
-
   if (!ready) return null;
 
   return (
@@ -862,26 +848,6 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
                                       <input type="text" value={getMeta(p.id, k) !== undefined ? getMeta(p.id, k) : (p[dbk] || '')}
                                         onChange={e => setMeta(p.id, k, e.target.value)} className={'w-' + w + ' px-1 py-0.5 text-xs border rounded text-center'} />
                                     </td>
-      )}
-      {showOnboarding && (
-        <div className="bg-blue-50 border-b border-blue-200">
-          <div className="max-w-6xl mx-auto px-4 py-4">
-            <div className="flex items-start gap-4">
-              <span className="text-2xl">🎉</span>
-              <div className="flex-1 space-y-2">
-                <h3 className="text-sm font-semibold text-blue-800">{t('workspace.onboarding.title', locale)}</h3>
-                <ol className="text-xs text-blue-700 space-y-1 list-decimal list-inside">
-                  <li>{locale === 'zh' ? '上传产品文件（Excel / PDF / Word）' : 'Upload your product files (Excel, PDF, Word)'}</li>
-                  <li>{locale === 'zh' ? '系统自动解析产品信息' : 'System auto-parses product info'}</li>
-                  <li>{locale === 'zh' ? '一键生成报价单' : 'One-click quotation generation'}</li>
-                </ol>
-              </div>
-              <button onClick={dismissOnboarding} className="text-xs text-blue-600 hover:text-blue-800 whitespace-nowrap">
-                {locale === 'zh' ? '知道了' : 'Got it'}
-              </button>
-            </div>
-          </div>
-        </div>
       )}
                                 </tr>
                               ))}
