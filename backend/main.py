@@ -1006,39 +1006,35 @@ async def get_quotations(user: dict = Depends(get_session_id)):
 @app.get("/api/images/")
 
 async def serve_image(path: str = Query(...)):
-
-    # Security: resolve symlinks/.. and check against allowlist
-
+    """安全提供图片文件。支持 || 分隔的多路径（同一行多列图片拼接）。"""
     allowed_dirs = [
-
         Path(PROJECT_ROOT / "product_tool" / "temp_images").resolve(),
-
         Path(PROJECT_ROOT / "product_tool" / "data").resolve(),
-
         Path(UPLOAD_DIR / "images").resolve(),
-
+        Path(UPLOAD_DIR).resolve(),  # 上传文件目录根（旧路径兼容）
     ]
 
-    try:
+    # 支持 || 拼接的多路径，逐个尝试
+    abs_path = None
+    for p in path.split('||'):
+        p = p.strip()
+        if not p:
+            continue
+        try:
+            candidate = Path(p).resolve()
+        except Exception:
+            continue
+        # 安全检查
+        if any(candidate == d or str(candidate).startswith(str(d) + os.sep) for d in allowed_dirs):
+            if candidate.is_file():
+                abs_path = candidate
+                break
 
-        abs_path = Path(path).resolve()
-
-    except Exception:
-
-        raise HTTPException(400, "无效的文件路径")
-
-    if not any(abs_path == d or str(abs_path).startswith(str(d) + os.sep) for d in allowed_dirs):
-
-        raise HTTPException(403, "无权访问此文件")
-
-    if not abs_path.is_file():
-
+    if abs_path is None:
         raise HTTPException(404, "图片未找到")
 
     ext = abs_path.suffix.lower()
-
     media_types = {'.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.gif': 'image/gif'}
-
     media_type = media_types.get(ext, 'application/octet-stream')
 
     # Cache: images static, 24h cache
