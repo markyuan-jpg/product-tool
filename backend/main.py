@@ -246,9 +246,10 @@ async def session_middleware(request: Request, call_next):
             key="session_id",
             value=session_id,
             httponly=True,
-            secure=request.url.scheme == "https",  # HTTPS 时启用 Secure
-            samesite="lax",
+            secure=request.url.scheme == "https",
+            samesite="none" if request.url.scheme == "https" else "lax",  # 跨子域需 none
             max_age=365 * 24 * 3600,
+            domain=".quoteflow.it.com" if "quoteflow" in str(request.url.hostname) else None,
         )
     return response
 
