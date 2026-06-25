@@ -203,11 +203,16 @@ function UploadSection({ onSaveSuccess, user }) {
                 {products.map((p, i) => (
                   <tr key={i} className="border-b border-[var(--border)]/50 hover:bg-[var(--warm-white)]">
                     <td className="py-2 px-4">
-                      <div className="w-10 h-10 rounded bg-gray-100 flex items-center justify-center overflow-hidden">
-                        {!failedImages.has(i) && (p._image_path || p.image_path) ? (
-                          <img src={API_BASE + '/api/images/?path=' + encodeURIComponent(p._image_path || p.image_path)} alt="" className="w-full h-full object-cover" loading="lazy"
-                            onError={() => setFailedImages(prev => { const n = new Set(prev); n.add(i); return n; })} />
-                        ) : <span className="text-xs text-[var(--text-secondary)]">{t('workspace.upload.noImage', locale)}</span>}
+                      <div className="w-10 h-10 rounded bg-gray-100 flex items-center justify-center overflow-hidden relative">
+                        {!failedImages.has(i) && (p._image_path || p.image_path) ? (() => {
+                          const paths = (p._image_path || p.image_path || '').split('||').filter(Boolean);
+                          return (<>
+                            <img src={API_BASE + '/api/images/?path=' + encodeURIComponent(paths[0])} alt="" className="w-full h-full object-cover cursor-pointer" loading="lazy"
+                              onError={() => setFailedImages(prev => { const n = new Set(prev); n.add(i); return n; })}
+                              onClick={() => { if (paths.length > 1) { const w = window.open(''); w.document.write(paths.map(pp => '<img src=\"' + API_BASE + '/api/images/?path=' + encodeURIComponent(pp) + '\" style=\"max-width:100%;margin-bottom:10px;display:block\" />').join('')); } }} />
+                            {paths.length > 1 && <span className="absolute -bottom-0.5 -right-0.5 bg-[var(--navy)] text-white text-[8px] rounded-full w-4 h-4 flex items-center justify-center">+{paths.length - 1}</span>}
+                          </>);
+                        })() : <span className="text-xs text-[var(--text-secondary)]">{t('workspace.upload.noImage', locale)}</span>}
                       </div>
                     </td>
                     <td className="py-2 px-4 font-medium text-[var(--navy)]">{p.model || p.sku || '-'}</td>
@@ -734,12 +739,18 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
                       <div className="text-xs text-[var(--text-secondary)]">{p.name_zh || p.name_en || ''}</div>
                     </td>
                     <td className="py-2.5 px-4">
-                      <div className="w-[60px] h-[60px] flex items-center justify-center">
-                        {p.image_path ? (
-                          <img src={API_BASE + '/api/images/?path=' + encodeURIComponent(p.image_path)}
-                            className="w-[60px] h-[60px] object-cover rounded border" loading="lazy"
-                            onError={(e) => { e.currentTarget.style.display = 'none'; const el = e.currentTarget.nextElementSibling; if (el) el.style.display = 'flex'; }} alt="" />
-                        ) : null}
+                      <div className="w-[60px] h-[60px] flex items-center justify-center relative">
+                        {p.image_path ? (() => {
+                          const paths = (p.image_path || '').split('||').filter(Boolean);
+                          return (<>
+                            <img src={API_BASE + '/api/images/?path=' + encodeURIComponent(paths[0])}
+                              className="w-[60px] h-[60px] object-cover rounded border cursor-pointer" loading="lazy"
+                              onError={(e) => { e.currentTarget.style.display = 'none'; const el = e.currentTarget.nextElementSibling; if (el) el.style.display = 'flex'; }}
+                              onClick={() => { if (paths.length > 1) { const w = window.open(''); w.document.write(paths.map(pp => '<img src=\"' + API_BASE + '/api/images/?path=' + encodeURIComponent(pp) + '\" style=\"max-width:90vw;margin-bottom:10px;display:block\" />').join('')); } }}
+                              alt="" />
+                            {paths.length > 1 && <span className="absolute bottom-0 right-0 bg-[var(--navy)] text-white text-[10px] rounded-full w-5 h-5 flex items-center justify-center">+{paths.length - 1}</span>}
+                          </>);
+                        })() : null}
                         <div className={'w-[60px] h-[60px] bg-gray-50 rounded border border-dashed items-center justify-center text-xs text-gray-300 ' + (p.image_path ? 'hidden' : 'flex')}>{t('workspace.upload.noImage', locale)}</div>
                       </div>
                     </td>

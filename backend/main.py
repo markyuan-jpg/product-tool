@@ -309,9 +309,10 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 # 所有功能对匿名用户开放，tier 固定为 'pro'
 
 class GuestUser:
-    """模拟 User 对象，所有功能对匿名用户开放"""
+    """虚拟用户对象，tier='pro' 开放所有功能。id 用 session UUID 生成数字"""
     def __init__(self, session_id: str):
-        self.id = session_id
+        # 用 session_id 的 hash 生成数字 ID（兼容 PostgreSQL INTEGER 列）
+        self.id = abs(hash(session_id)) % (2**31 - 1) if session_id != 'anonymous' else 1
         self.username = "guest"
         self.email = ""
         self.tier = "pro"
