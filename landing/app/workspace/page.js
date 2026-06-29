@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useLocale, t } from '@/lib/i18n';
 import API_BASE from '@/lib/api';
 import { friendlyError } from '@/lib/errors';
+import { isLoggedIn, getToken, getStoredUser, clearAuth } from '@/lib/auth';
 import Nav from '@/components/Nav';
 import Footer from '@/components/Footer';
 import { useToast } from '@/components/Toast';
@@ -29,7 +30,12 @@ function getSessionId() {
   if (!sid) { sid = crypto.randomUUID(); localStorage.setItem('quote_session_id', sid); }
   return sid;
 }
-const SID = () => ({ 'X-Session-ID': getSessionId() });
+const SID = () => {
+  const headers = { 'X-Session-ID': getSessionId() };
+  const token = getToken();
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  return headers;
+};
 
 export default function WorkspacePage() {
   const { locale, ready } = useLocale();
@@ -40,8 +46,13 @@ export default function WorkspacePage() {
   const [quotationRefreshKey, setQuotationRefreshKey] = useState(0);
 
   useEffect(() => {
-    // 匿名模式：无需登录，直接进入工作台
-    setUser({ username: 'guest', tier: 'pro' });
+    // 已登录 → 使用真实用户；未登录 → 匿名 GuestUser
+    if (isLoggedIn()) {
+      const stored = getStoredUser();
+      setUser(stored || { username: 'guest', tier: 'pro' });
+    } else {
+      setUser({ username: 'guest', tier: 'pro' });
+    }
   }, []);
 
   if (!ready) return null;

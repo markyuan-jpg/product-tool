@@ -5,6 +5,8 @@
     "pricing": "Pricing",
     "workspace": "Workspace",
     "login": "Login",
+    "register": "Register",
+    "account": "Account",
     "logout": "Logout",
     "title": "Quote Integrator"
   },

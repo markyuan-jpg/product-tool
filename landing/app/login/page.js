@@ -30,7 +30,7 @@ export default function LoginPage() {
       body.append('password', password);
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000);
-      const res = await fetch(`${API_BASE}/api/auth/login`, { method: 'POST', body, signal: controller.signal });
+      const res = await fetch(`${API_BASE}/api/auth/login`, { method: 'POST', body, signal: controller.signal, credentials: 'include' });
       clearTimeout(timeoutId);
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || t('auth.loginFailed', locale));

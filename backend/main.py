@@ -401,9 +401,13 @@ def _guest_or_none(request: Request):
     """兼容旧 get_current_user_optional — 总是返回 GuestUser"""
     return getattr(request.state, 'session_id', 'guest')
 
-# 兼容旧代码的别名
-get_current_user = get_session_id
-get_current_user_optional = get_session_id
+# Auth imports — restored for real JWT auth
+from auth import hash_password, verify_password, create_access_token, create_refresh_token, get_user_by_username, get_current_user as _auth_get_current_user, get_current_user_optional as _auth_get_current_user_optional
+from sqlalchemy.ext.asyncio import AsyncSession
+from database import get_session, User
+
+# 兼容旧代码的别名（workspace 匿名端点继续用 get_session_id）
+# auth 端点直接用 _auth_get_current_user / _auth_get_current_user_optional
 
 # require_pro 改为空操作（所有用户都是 Pro）
 def require_pro(user):
@@ -429,7 +433,7 @@ from payment import create_checkout_session, verify_webhook, handle_webhook_even
 
 @app.post("/api/payment/create-checkout")
 
-async def payment_checkout(user: User = Depends(get_session_id)):
+async def payment_checkout(user: User = Depends(_auth_get_current_user)):
     """Create Creem checkout session for Pro upgrade."""
     result = create_checkout_session(
         user_id=user.id,
@@ -563,8 +567,8 @@ async def register(
     })
     resp.set_cookie(
         key="refresh_token", value=refresh_token,
-        httponly=True, secure=True, samesite="strict",
-        path="/api/auth", max_age=7*24*3600
+        httponly=True, secure=True, samesite="none",
+        domain=".quoteflow.it.com", path="/api/auth", max_age=7*24*3600
     )
     return resp
 
@@ -592,15 +596,15 @@ async def login(
     })
     resp.set_cookie(
         key="refresh_token", value=refresh_token,
-        httponly=True, secure=True, samesite="strict",
-        path="/api/auth", max_age=7*24*3600
+        httponly=True, secure=True, samesite="none",
+        domain=".quoteflow.it.com", path="/api/auth", max_age=7*24*3600
     )
     return resp
 
 
 @app.get("/api/user/me")
 
-async def user_me(user: User = Depends(get_session_id)):
+async def user_me(user: User = Depends(_auth_get_current_user)):
     return {
         "id": user.id, "username": user.username, "tier": user.tier,
         "upload_count": user.upload_count, "email": user.email or ''
@@ -609,7 +613,7 @@ async def user_me(user: User = Depends(get_session_id)):
 
 @app.get("/api/user/usage")
 
-async def user_usage(user: User = Depends(get_session_id), db: AsyncSession = Depends(get_session)):
+async def user_usage(user: User = Depends(_auth_get_current_user), db: AsyncSession = Depends(get_session)):
     from sqlalchemy import func, select
     from database import Product
     product_count = 0
@@ -652,7 +656,7 @@ async def refresh_token(request: Request, db: AsyncSession = Depends(get_session
 async def change_password(
     old_password: str = Form(...),
     new_password: str = Form(...),
-    user: User = Depends(get_session_id),
+    user: User = Depends(_auth_get_current_user),
     db: AsyncSession = Depends(get_session),
 ):
     if len(new_password) < 6:

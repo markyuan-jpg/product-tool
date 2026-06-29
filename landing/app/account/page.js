@@ -43,10 +43,10 @@ export default function AccountPage() {
     if (!isLoggedIn()) { router.push('/login'); return; }
     setUser(getStoredUser());
     fetch(`${API_BASE}/api/user/usage`, {
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+      headers: { 'Authorization': `Bearer ${getToken()}` }
     }).then(r => r.json()).then(setUsage).catch(e => console.error('Failed to load usage:', e));
     fetch(`${API_BASE}/api/template?user_id=${getStoredUser()?.id || 'local'}`, {
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+      headers: { 'Authorization': `Bearer ${getToken()}` }
     }).then(r => r.json()).then(d => {
       if (d.name) setCompanyName(d.name);
       if (d.name_en) setCompanyNameEn(d.name_en);
