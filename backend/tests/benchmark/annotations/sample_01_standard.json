@@ -1,0 +1,28 @@
+{
+  "file": "sample_01_standard.xlsx",
+  "description": "标准外贸报价单 — 3个产品，型号/价格/规格/包装完整",
+  "expected_product_count": 3,
+  "expected_products": [
+    {
+      "model": "BT-001",
+      "name_keywords": ["蓝牙耳机"],
+      "price_rmb": 45.00,
+      "price_tolerance": 5,
+      "spec_keywords": ["蓝牙5.3", "续航", "IPX5", "Type-C"]
+    },
+    {
+      "model": "BP-200",
+      "name_keywords": ["移动电源"],
+      "price_rmb": 68.00,
+      "price_tolerance": 5,
+      "spec_keywords": ["22.5W", "快充", "USB-C", "LED"]
+    },
+    {
+      "model": "WK-500",
+      "name_keywords": ["智能手表"],
+      "price_rmb": 129.00,
+      "price_tolerance": 5,
+      "spec_keywords": ["AMOLED", "心率", "IP68", "续航"]
+    }
+  ]
+}

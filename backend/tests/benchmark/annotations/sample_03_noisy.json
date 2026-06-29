@@ -1,0 +1,28 @@
+{
+  "file": "sample_03_noisy.xlsx",
+  "description": "含无效行的表格 — 前2行标题/空行, 订单号干扰行, 3个蓝牙音箱",
+  "expected_product_count": 3,
+  "expected_products": [
+    {
+      "model": "SP-100",
+      "name_keywords": ["Bluetooth", "Speaker", "20W"],
+      "price_rmb": 89.00,
+      "price_tolerance": 5,
+      "spec_keywords": ["20W", "IPX7", "TWS", "12h"]
+    },
+    {
+      "model": "SP-200",
+      "name_keywords": ["Portable", "Speaker", "Mini"],
+      "price_rmb": 35.00,
+      "price_tolerance": 5,
+      "spec_keywords": ["5W", "IPX5", "Bluetooth", "USB-C"]
+    },
+    {
+      "model": "SP-300",
+      "name_keywords": ["Party", "Speaker"],
+      "price_rmb": 199.00,
+      "price_tolerance": 5,
+      "spec_keywords": ["50W", "Karaoke", "LED", "8h"]
+    }
+  ]
+}

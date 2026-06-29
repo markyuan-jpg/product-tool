@@ -25,7 +25,10 @@ jobs:
           pip install pytest pytest-asyncio httpx
 
       - name: Run backend tests
-        run: python -m pytest tests/ -v --tb=short
+        run: python -m pytest tests/ -v --tb=short --ignore=tests/benchmark
+
+      - name: Run parse accuracy benchmark
+        run: python tests/benchmark/run_benchmark_ci.py
 
   frontend-lint:
     runs-on: ubuntu-latest

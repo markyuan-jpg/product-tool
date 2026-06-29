@@ -1,0 +1,21 @@
+{
+  "file": "sample_02_dual_price.xlsx",
+  "description": "复杂格式 — 2个LED灯具，含USD和RMB双价格列、币种标记",
+  "expected_product_count": 2,
+  "expected_products": [
+    {
+      "model": "LED-100",
+      "name_keywords": ["LED", "Panel", "100W"],
+      "price_rmb": 85.00,
+      "price_tolerance": 10,
+      "spec_keywords": ["100W", "5000K", "120lm", "CE"]
+    },
+    {
+      "model": "LED-200",
+      "name_keywords": ["LED", "Panel", "200W"],
+      "price_rmb": 145.00,
+      "price_tolerance": 10,
+      "spec_keywords": ["200W", "4000K", "130lm", "IP65"]
+    }
+  ]
+}
