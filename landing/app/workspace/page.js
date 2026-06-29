@@ -78,10 +78,12 @@ function UploadSection({ onSaveSuccess, user }) {
   const [pasting, setPasting] = useState(false);
   const [pasteError, setPasteError] = useState(null);
   const pasteInputRef = useRef(null);
+  const lastFileRef = useRef(null);  // 用于重试解析
 
   const handleFile = async (file) => {
     const valid = ['.xlsx', '.xls', '.pdf', '.docx'].some(e => file.name.toLowerCase().endsWith(e));
     if (!valid) { toast.addToast(t('workspace.upload.onlySupport', locale), { type: 'error' }); return; }
+    lastFileRef.current = file;
     setParsing(true); setParseError(null);
     try {
       const fd = new FormData(); fd.append('file', file);
@@ -188,7 +190,12 @@ function UploadSection({ onSaveSuccess, user }) {
             ) : (
               <div className="flex flex-col items-center gap-2">
                 <p className="text-sm text-[var(--error)]">{parseError}</p>
-                <button onClick={(e) => { e.stopPropagation(); reset(); }} className="px-4 py-2 rounded-lg border text-sm cursor-pointer">{t('workspace.upload.reupload', locale)}</button>
+                <div className="flex gap-2">
+                  {lastFileRef.current && (
+                    <button onClick={(e) => { e.stopPropagation(); handleFile(lastFileRef.current); }} className="px-4 py-2 rounded-lg bg-[var(--navy)] text-white text-sm cursor-pointer">{t('workspace.upload.retry', locale)}</button>
+                  )}
+                  <button onClick={(e) => { e.stopPropagation(); reset(); }} className="px-4 py-2 rounded-lg border text-sm cursor-pointer">{t('workspace.upload.reupload', locale)}</button>
+                </div>
               </div>
       )}
       {galleryImages && <ImageGallery images={galleryImages.images} initialIndex={galleryImages.index} onClose={() => setGalleryImages(null)} />}
@@ -606,6 +613,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
       // 串行请求，逐个下载（显示进度）
       const total = tasks.length;
       const downloads = [];
+      let failedCount = 0;
       for (let i = 0; i < total; i++) {
         const task = tasks[i];
         setExportStatus(t('workspace.export.generatingFileProgress', locale).replace('{name}', task.name).replace('{current}', i + 1).replace('{total}', total));
@@ -626,9 +634,20 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
               const blob = await r.blob();
               downloads.push({ blob, name: task.name });
             }
-          }
-        } catch (e) { console.error('导出单文档失败:', e); /* 单个失败不影响其他 */ }
+          } else { failedCount++; }
+        } catch (e) { console.error('导出单文档失败:', e); failedCount++; }
       }
+      // 汇总提示
+      const successCount = downloads.length;
+      if (failedCount > 0) {
+        toast.addToast(
+          locale === 'zh'
+            ? `${successCount}/${total} 个文档生成成功，${failedCount} 个失败，请重试`
+            : `${successCount}/${total} docs succeeded, ${failedCount} failed. Retry?`,
+          { type: 'error', duration: 8000 }
+        );
+      }
+      if (downloads.length === 0) { setExportLoading(false); return; }
       setExportStatus(t('workspace.export.downloading', locale));
       // 逐个触发下载
       for (const item of downloads) {
