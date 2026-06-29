@@ -1271,18 +1271,15 @@ def extract_products_from_pdf_v2(pdf_path: str) -> Optional[pd.DataFrame]:
     
     # 跨表价格匹配:如果第一个表的产品没有价格,检查后续表是否有按列对应的价格
     if not df.empty and 'price_rmb' in df.columns:
-        # Check if all prices are 0 or None
         all_zero = all(
             p is None or p == 0 or p == 0.0 
             for p in df['price_rmb'].values
         )
         if all_zero:
-            # 尝试从其他表中按列位置提取价格(通常价格在第二个表的同列位置)
             for table in tables[1:]:
                 for row in table:
                     for ci, cell in enumerate(row[1:], 1):
                         val = str(cell or '').strip().lower()
-                        # 查找含usd/cny/$的数字(如"950usd"、"1300usd")
                         m = re.search(r'([\d,]+(?:\.\d+)?)\s*(usd|cny|rmb|\$|¥|€)', val, re.I)
                         if not m:
                             m = re.search(r'(usd|cny|rmb|\$|¥|€)\s*([\d,]+(?:\.\d+)?)', val, re.I)
@@ -1294,11 +1291,14 @@ def extract_products_from_pdf_v2(pdf_path: str) -> Optional[pd.DataFrame]:
                             price_val = m.group(1)
                         try:
                             p = float(price_val.replace(',', ''))
-                            # 按列位置匹配:第ci列的价格给第ci个产品
-                            # 始终取最后一个价格(通常是total行)
                             if ci <= len(df):
                                 idx = ci - 1
-                                df.at[idx, 'price_rmb'] = p
+                                if df.at[idx, 'price_rmb'] == 0 or df.at[idx, 'price_rmb'] is None:
+                                    df.at[idx, 'price_rmb'] = p  # 取第一个价格(单价),不覆盖
+                                    # 检测币种
+                                    if 'usd' in val or '$' in val:
+                                        if 'currency' in df.columns:
+                                            df.at[idx, 'currency'] = 'USD'
                         except Exception:
                             pass
     
