@@ -18,9 +18,9 @@ This policy covers:
 ## Security Measures
 
 ### Authentication
-- Passwords: bcrypt hashed (never stored in plaintext)
-- JWT: access tokens (15 min) + refresh tokens (7 days, httpOnly cookie)
-- Token refresh: automatic 401 retry with httpOnly cookie
+- Primary: Anonymous mode — GuestUser + X-Session-ID header (no password required)
+- Dormant: JWT access tokens (15 min) + refresh tokens (7 days, httpOnly cookie)
+- Dormant: bcrypt password hashing (never stored in plaintext)
 
 ### Rate Limiting
 - Login/Register: 5 requests/minute/IP
@@ -44,7 +44,7 @@ This policy covers:
 - Database: SQLAlchemy ORM (parameterized queries — SQL injection resistant)
 - Backend: regular dependency updates
 - Error monitoring: Sentry (production)
-- Cookie security: httpOnly, Secure, SameSite=Strict
+- Cookie security: httpOnly, Secure, SameSite=None, domain=.quoteflow.it.com (cross-subdomain session)
 
 ## Known Limitations
 

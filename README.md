@@ -9,6 +9,32 @@
 
 ---
 
+## 会话机制
+
+当前为**匿名模式**，无需注册/登录即可使用全部功能：
+
+- 浏览器首次访问自动生成 UUID（`localStorage.quote_session_id`）
+- 每次请求携带 `X-Session-ID` header（绕过跨子域 cookie 限制）
+- 后端以 `GuestUser` 绑定会话，`require_pro` 为 no-op（所有功能免费开放）
+- 登录/注册/支付代码保留休眠（`auth.py`、`payment.py`、`database.py` 未删除），恢复只需改 Nav + 移除 session 中间件
+
+---
+
+## 功能
+
+| 功能 | 状态 |
+|------|:----:|
+| 文件上传解析 (Excel × PDF × DOCX) | ✅ |
+| 报价单生成 (Excel × PDF) | ✅ |
+| 产品库管理 (搜索/删除/分页) | ✅ |
+| PI 形式发票 | ✅ |
+| Packing List 装箱单 | ✅ |
+| Commercial Invoice 商业发票 | ✅ |
+| 多图提取 (嵌入图 + 浮动图自动拼接) | ✅ |
+| 智能粘贴 (AI 文本→产品) | ⚠️ 已禁用 (DeepSeek API 不公开) |
+
+---
+
 ## 技术栈
 
 | 层 | 技术 |
@@ -16,28 +42,13 @@
 | 前端 | Next.js 16 + React 19 + Tailwind CSS v4 |
 | 后端 | FastAPI (Python 3.11+) + SQLAlchemy async |
 | 数据库 | SQLite (默认) / PostgreSQL (可选) |
-| 支付 | Creem |
+| 支付 | Creem (休眠中) |
 | 邮件 | Resend > SMTP > noop (三通道回退) |
 | 监控 | Sentry (后端 + 前端) |
 | 分析 | Vercel Analytics |
 | 限流 | slowapi (nginx X-Forwarded-For 感知) |
 | 日志 | Python logging + 可选 JSON 结构化输出 |
 | 部署 | 阿里云 VPS 新加坡 (后端) + Vercel (前端) |
-
----
-
-## 功能对比
-
-| 功能 | Free | Pro ($9.99/月) |
-|------|:----:|:---:|
-| 文件上传解析 (Excel/PDF/Word) | ✅ | ✅ |
-| 报价单生成 (Excel + PDF) | ✅ | ✅ |
-| 产品库管理 | ✅ 最多200个 | ✅ 无限 |
-| 上传次数/月 | 20次 | 无限 |
-| 智能粘贴 (AI 文本→产品) | ❌ | ✅ |
-| PI 形式发票 | ❌ | ✅ |
-| Packing List 装箱单 | ❌ | ✅ |
-| Commercial Invoice 商业发票 | ❌ | ✅ |
 
 ---
 
@@ -67,7 +78,7 @@ cd backend && venv\Scripts\python -m pytest tests/ -v
 |------|:---:|------|
 | `JWT_SECRET_KEY` | ✅ | JWT 签名密钥（最少 32 字符） |
 | `BASE_URL` | ✅ | 前端域名，用于 CORS |
-| `DEEPSEEK_API_KEY` | ✅ | DeepSeek AI（智能粘贴 + AI 列检测） |
+| `DEEPSEEK_API_KEY` | 否 | DeepSeek AI（智能粘贴 + AI 列检测，不设置仅影响 parse/with-ai） |
 | `DATABASE_URL` | 否 | PostgreSQL 连接串（默认 `sqlite+aiosqlite:///./app.db`） |
 | `CREEM_API_KEY` | 否 | Creem 支付 API Key |
 | `CREEM_WEBHOOK_SECRET` | 否 | Creem Webhook HMAC 签名密钥 |
@@ -148,26 +159,28 @@ cd backend && python migrate_data.py
 
 ```
 ├── backend/                   # FastAPI 后端 (35 个端点)
-│   ├── main.py                # 应用入口
-│   ├── auth.py                # JWT 鉴权
-│   ├── database.py            # ORM (User/Product/Quotation)
-│   ├── payment.py             # Creem 支付
+│   ├── main.py                # 应用入口 + 匿名模式 session 中间件
+│   ├── auth.py                # JWT 鉴权（休眠中）
+│   ├── database.py            # ORM (User/Product/Quotation)（休眠中）
+│   ├── payment.py             # Creem 支付（休眠中）
 │   ├── mailer.py              # 邮件 (Resend > SMTP > noop)
 │   ├── sanitize.py            # XSS 输入清洗
 │   ├── logger.py              # JSON 结构化日志
 │   ├── universal_parser.py    # 通用解析器
 │   ├── score.py               # 双解析器评分
-│   ├── tests/                 # 37 项单元测试
+│   ├── product_repo.py        # 产品 CRUD（含自动建表）
+│   ├── tests/                 # 34 项单元测试
 │   └── requirements.txt
-├── landing/                   # Next.js 前端 (13 个页面)
+├── landing/                   # Next.js 前端
 │   ├── app/                   # 页面路由
+│   │   └── workspace/         # 工作台（匿名免登，X-Session-ID 会话）
 │   ├── components/            # Nav/Footer/ErrorBoundary
 │   ├── lib/                   # api/auth/i18n/errors
 │   └── translations/          # zh.json / en.json
 ├── product_tool/              # 核心解析引擎
 │   ├── src/core/              # 解析器 (Excel/DOCX/PDF)
+│   │   └── image.py           # 图片三路合并提取 (openpyxl+DISPIMG+drawing)
 │   ├── src/output/            # 报价单生成
-│   ├── tests/                 # 12 个解析器测试
 │   └── shared_keywords.py     # 120+ 关键词 (25+ 行业)
 ├── scripts/                   # 运维脚本 (backup.sh/ps1)
 ├── .github/workflows/         # CI/CD

@@ -97,7 +97,7 @@ Pro 升级返回 502。如需启用，在 `backend/.env` 中配置。
 | `JWT_SECRET_KEY` | ✅ | JWT 签名密钥 |
 | `BASE_URL` | ✅ | Vercel 前端域名，用于 CORS |
 | `DATABASE_URL` | 可选 | PostgreSQL 连接串（默认 SQLite） |
-| `DEEPSEEK_API_KEY` | ✅ | DeepSeek AI（智能粘贴 + AI 列检测） |
+| `DEEPSEEK_API_KEY` | 可选 | DeepSeek AI（不设置仅影响 parse/with-ai 和智能粘贴端点） |
 | `CREEM_API_KEY` | 可选 | Creem 支付 |
 | `CREEM_WEBHOOK_SECRET` | 可选 | Creem Webhook 签名 |
 | `CREEM_PRODUCT_ID_PRO` | 可选 | Creem 产品 ID |
@@ -159,15 +159,17 @@ function Component() {
 
 ## 智能粘贴 (Smart Paste)
 
-Pro 用户专属功能，粘贴任意格式产品文本 → AI 自动提取结构化数据。
+> **⚠️ 已禁用：** DeepSeek API 不对外开放，前端 Tab 已移除。端点 `POST /api/parse-text-products` 仍在但无 UI 入口。
+> 
+> ~~Pro 用户专属功能，粘贴任意格式产品文本 → AI 自动提取结构化数据。~~
 
-### 工作流程
+### 工作流程（已禁用）
 
-1. workspace 页面切换到「智能粘贴」tab
-2. 粘贴产品描述（微信/邮件/笔记等任意格式）
-3. 可选：拖入图片（文件名含型号自动匹配）
-4. 点击「解析」→ 后端调 DeepSeek 提取产品
-5. 结果展示在已有产品表格，可编辑后保存/生成报价单
+> ~~1. workspace 页面切换到「智能粘贴」tab~~
+> ~~2. 粘贴产品描述（微信/邮件/笔记等任意格式）~~
+> ~~3. 可选：拖入图片（文件名含型号自动匹配）~~
+> ~~4. 点击「解析」→ 后端调 DeepSeek 提取产品~~
+> ~~5. 结果展示在已有产品表格，可编辑后保存/生成报价单~~
 
 ### 后端
 
