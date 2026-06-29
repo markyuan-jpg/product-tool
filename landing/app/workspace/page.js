@@ -8,6 +8,18 @@ import { friendlyError } from '@/lib/errors';
 import Nav from '@/components/Nav';
 import Footer from '@/components/Footer';
 
+// 带超时的 fetch 封装
+async function fetchWithTimeout(url, options = {}, timeoutMs = 30000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    return res;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // 匿名会话 ID：存 localStorage，每次请求带 X-Session-ID header（绕过跨域 cookie 限制）
 function getSessionId() {
   if (typeof window === 'undefined') return '';
@@ -94,7 +106,7 @@ function UploadSection({ onSaveSuccess, user }) {
     setSaving(true); setSaveMsg(null);
     try {
       const b = new URLSearchParams(); b.append('products', JSON.stringify(products));
-      const r = await fetch(API_BASE + '/api/products/save', { method: 'POST', headers: { ...SID() }, credentials: 'include', body: b });
+      const r = await fetchWithTimeout(API_BASE + '/api/products/save', { method: 'POST', headers: { ...SID() }, credentials: 'include', body: b }, 30000);
       if (!r.ok) throw new Error(t('workspace.upload.saveFailed', locale));
       setSaveMsg('success'); setProducts([]);
       if (onSaveSuccess) onSaveSuccess();
@@ -339,7 +351,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
       if (es.shippingPortLoading) setShippingPortLoading(es.shippingPortLoading);
       if (es.packingType) setPackingType(es.packingType);
       if (es.freight) setFreight(es.freight);
-    } catch (e) {}
+        } catch (e) { console.error('银行信息加载失败:', e); }
   }, []);
 
   useEffect(() => {
@@ -362,10 +374,10 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
     if (!confirm(t('workspace.productLib.confirmBatchDelete', locale).replace('{count}', selected.size))) return;
     try {
       const b = new URLSearchParams(); b.append('product_ids', JSON.stringify(Array.from(selected)));
-      const r = await fetch(API_BASE + '/api/products/batch-delete', {
+      const r = await fetchWithTimeout(API_BASE + '/api/products/batch-delete', {
         method: 'POST', body: b,
         headers: { ...SID(), 'Content-Type': 'application/x-www-form-urlencoded' }
-      });
+      }, 15000);
       if (!r.ok) throw new Error(t('workspace.productLib.deleteFailed', locale));
       setSelected(new Set()); fetchProducts();
     } catch (err) { alert(t('workspace.productLib.deleteFailed', locale) + '：' + friendlyError(err)); }
@@ -374,7 +386,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
   const handleDelete = async (id) => {
     if (!confirm(t('workspace.productLib.confirmDelete', locale))) return;
     try {
-      const r = await fetch(API_BASE + '/api/products/' + id, { method: 'DELETE', headers: { ...SID() }, credentials: 'include' });
+      const r = await fetchWithTimeout(API_BASE + '/api/products/' + id, { method: 'DELETE', headers: { ...SID() }, credentials: 'include' }, 15000);
       if (!r.ok) throw new Error(t('workspace.productLib.deleteFailed', locale));
       fetchProducts();
     } catch (err) { alert(t('workspace.productLib.deleteFailed', locale) + '：' + friendlyError(err)); }
@@ -463,7 +475,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
         b.append('payment_terms', piPaymentTerms);
         b.append('currency', piCurrency);
         try {
-          const bankRes = await fetch(API_BASE + '/api/bank/load', { headers: { ...SID() }, credentials: 'include' });
+          const bankRes = await fetchWithTimeout(API_BASE + '/api/bank/load', { headers: { ...SID() }, credentials: 'include' }, 15000);
           if (bankRes.ok) {
             const bank = await bankRes.json();
             if (bank.beneficiary) b.append('bank_beneficiary', bank.beneficiary);
@@ -472,7 +484,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
             if (bank.account_no) b.append('bank_account', bank.account_no);
             if (bank.swift_code) b.append('bank_swift', bank.swift_code);
           }
-        } catch (e) {}
+    } catch (e) { console.error('产品搜索失败:', e); }
       }
 
       if (exportType === 'pi' || exportType === 'quotation') {
@@ -503,9 +515,9 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
       if (ct.includes('json')) {
         const data = await r.json();
         if (data.id) {
-          const dlR = await fetch(API_BASE + '/api/quotations/' + data.id + '/download', {
+          const dlR = await fetchWithTimeout(API_BASE + '/api/quotations/' + data.id + '/download', {
             headers: { ...SID() }, credentials: 'include'
-          });
+          }, 60000);
           if (dlR.ok) {
             const blob = await dlR.blob();
             const dlUrl = URL.createObjectURL(blob);
@@ -602,7 +614,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
               downloads.push({ blob, name: task.name });
             }
           }
-        } catch (e) { /* 单个失败不影响其他 */ }
+        } catch (e) { console.error('导出单文档失败:', e); /* 单个失败不影响其他 */ }
       }
       setExportStatus(t('workspace.export.downloading', locale));
       // 逐个触发下载
@@ -610,16 +622,16 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
         await new Promise(r => setTimeout(r, 500));
         if (item.id) {
           try {
-            const dlR = await fetch(API_BASE + '/api/quotations/' + item.id + '/download', {
+            const dlR = await fetchWithTimeout(API_BASE + '/api/quotations/' + item.id + '/download', {
               headers: { ...SID() }, credentials: 'include'
-            });
+            }, 60000);
             if (dlR.ok) {
               const blob = await dlR.blob();
               const url = URL.createObjectURL(blob);
               const a = document.createElement('a'); a.href = url; a.download = item.name; document.body.appendChild(a); a.click(); document.body.removeChild(a);
               setTimeout(() => URL.revokeObjectURL(url), 5000);
             }
-          } catch (e) { /* 单个下载失败不影响其他 */ }
+          } catch (e) { console.error('导出下载失败:', e); /* 单个下载失败不影响其他 */ }
         } else if (item.blob) {
           const url = URL.createObjectURL(item.blob);
           const a = document.createElement('a'); a.href = url; a.download = item.name; document.body.appendChild(a); a.click(); document.body.removeChild(a);
@@ -1150,7 +1162,7 @@ function QuotationHistorySection({ refreshKey }) {
 
   const handleDownload = async (id) => {
     try {
-      const r = await fetch(API_BASE + '/api/quotations/' + id + '/download', { headers: { ...SID() }, credentials: 'include' });
+      const r = await fetchWithTimeout(API_BASE + '/api/quotations/' + id + '/download', { headers: { ...SID() }, credentials: 'include' }, 60000);
       if (!r.ok) throw new Error(t('workspace.quotationHistory.downloadFailed', locale));
       const blob = await r.blob();
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
@@ -1163,7 +1175,7 @@ function QuotationHistorySection({ refreshKey }) {
   const handleDelete = async (id) => {
     if (!confirm(t('workspace.quotationHistory.confirmDelete', locale))) return;
     try {
-      const r = await fetch(API_BASE + '/api/quotations/' + id, { method: 'DELETE', headers: { ...SID() }, credentials: 'include' });
+      const r = await fetchWithTimeout(API_BASE + '/api/quotations/' + id, { method: 'DELETE', headers: { ...SID() }, credentials: 'include' }, 15000);
       if (!r.ok) throw new Error(t('workspace.quotationHistory.deleteFailed', locale));
       fetchQuotations();
     } catch (err) { alert(t('workspace.quotationHistory.deleteFailed', locale) + '：' + friendlyError(err)); }
@@ -1175,10 +1187,10 @@ function QuotationHistorySection({ refreshKey }) {
     try {
       const b = new URLSearchParams();
       b.append('ids', JSON.stringify(Array.from(selectedIds)));
-      const r = await fetch(API_BASE + '/api/quotations/batch-delete', {
+      const r = await fetchWithTimeout(API_BASE + '/api/quotations/batch-delete', {
         method: 'POST', body: b,
         headers: { ...SID(), 'Content-Type': 'application/x-www-form-urlencoded' }
-      });
+      }, 15000);
       if (!r.ok) throw new Error(t('workspace.quotationHistory.deleteFailed', locale));
       fetchQuotations();
     } catch (err) { alert(t('workspace.quotationHistory.deleteFailed', locale) + '：' + friendlyError(err)); }
@@ -1191,10 +1203,10 @@ function QuotationHistorySection({ refreshKey }) {
       const ids = quotations.map(q => q.id);
       const b = new URLSearchParams();
       b.append('ids', JSON.stringify(ids));
-      const r = await fetch(API_BASE + '/api/quotations/batch-delete', {
+      const r = await fetchWithTimeout(API_BASE + '/api/quotations/batch-delete', {
         method: 'POST', body: b,
         headers: { ...SID(), 'Content-Type': 'application/x-www-form-urlencoded' }
-      });
+      }, 15000);
       if (!r.ok) throw new Error(t('workspace.quotationHistory.deleteFailed', locale));
       fetchQuotations();
     } catch (err) { alert(t('workspace.quotationHistory.deleteFailed', locale) + '：' + friendlyError(err)); }
