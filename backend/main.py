@@ -989,8 +989,8 @@ def _extract_packaging_from_spec(spec_zh: str) -> dict:
     return result
 
 
-@limiter.limit("30/minute")
 @app.post("/api/products/save")
+@limiter.limit("30/minute")
 
 async def save_products(request: Request, products: str = Form(...), user: dict = Depends(get_session_id)):
 
@@ -1677,7 +1677,7 @@ async def parse_file(
 
         # 尺寸结构化提取
         try:
-            from dimension_extractor import enrich_products_with_dimensions
+            from utils.dimension_extractor import enrich_products_with_dimensions
             products = enrich_products_with_dimensions(products)
         except ImportError:
             pass
@@ -1693,7 +1693,7 @@ async def parse_file(
         return {
             "products": products,
             "count": len(products),
-            "parse_source": parse_source,
+            "source": parse_source,
             "cache_key": cache_key,
         }
 
@@ -1714,8 +1714,8 @@ async def parse_file(
 
 #  AI-enhanced parse 
 
-@limiter.limit("10/minute")
 @app.post("/api/parse/with-ai")
+@limiter.limit("10/minute")
 
 async def parse_with_ai(request: Request, file: UploadFile = File(...), ai_backend: str = Form("gemini"), user: dict = Depends(get_session_id)):
 
@@ -1782,7 +1782,7 @@ async def parse_with_ai(request: Request, file: UploadFile = File(...), ai_backe
 
                 # 尺寸结构化提取
                 try:
-                    from dimension_extractor import enrich_products_with_dimensions
+                    from utils.dimension_extractor import enrich_products_with_dimensions
                     products = enrich_products_with_dimensions(products)
                 except ImportError:
                     pass
@@ -1795,8 +1795,6 @@ async def parse_with_ai(request: Request, file: UploadFile = File(...), ai_backe
         # AI column detection
 
         md_table = sheet_to_markdown(ws, max_rows=15)
-
-        wb.close()
 
         col_map = ai_detect_columns(md_table, backend=ai_backend)
 
@@ -1815,6 +1813,7 @@ async def parse_with_ai(request: Request, file: UploadFile = File(...), ai_backe
         # Parse with AI column map
         header_row_3 = detect_header_row(ws)
         df = parse_with_colmap(ws, header_row_3, col_map)
+        wb.close()
 
         if df is None or len(df) == 0:
 
@@ -1825,7 +1824,7 @@ async def parse_with_ai(request: Request, file: UploadFile = File(...), ai_backe
 
         # 尺寸结构化提取
         try:
-            from dimension_extractor import enrich_products_with_dimensions
+            from utils.dimension_extractor import enrich_products_with_dimensions
             products = enrich_products_with_dimensions(products)
         except ImportError:
             pass
@@ -1847,8 +1846,8 @@ async def parse_with_ai(request: Request, file: UploadFile = File(...), ai_backe
             os.remove(save_path)
 
 
-@limiter.limit("10/minute")
 @app.post("/api/parse-text-products")
+@limiter.limit("10/minute")
 
 async def parse_text_products(request: Request, data: dict = Body(...), user: GuestUser = Depends(get_session_id)):
     """智能粘贴 — 对所有匿名用户开放"""
@@ -1928,8 +1927,8 @@ async def delete_doc_template(doc_type: str, user: dict = Depends(get_session_id
 
 #  Generate quotation 
 
-@limiter.limit("30/minute")
 @app.post("/api/quotation")
+@limiter.limit("30/minute")
 
 async def generate_quotation(
     request: Request,
@@ -2159,8 +2158,8 @@ async def batch_delete_quotations(ids: str = Form(...), user: dict = Depends(get
 
 #  Generate PI (Proforma Invoice) 
 
-@limiter.limit("30/minute")
 @app.post("/api/quotation/pdf")
+@limiter.limit("30/minute")
 
 async def generate_quotation_pdf(
     request: Request,
@@ -2218,8 +2217,8 @@ async def generate_quotation_pdf(
     return FileResponse(str(output_path), media_type="application/pdf", filename=f"报价单_{ts}.pdf")
 
 
-@limiter.limit("30/minute")
 @app.post("/api/pi")
+@limiter.limit("30/minute")
 async def generate_pi(
     request: Request,
     products: str = Form(...),
@@ -2348,8 +2347,8 @@ async def generate_pi(
 
 #  Generate Packing List 
 
-@limiter.limit("30/minute")
 @app.post("/api/packing")
+@limiter.limit("30/minute")
 
 async def generate_packing(
     request: Request,
@@ -2434,8 +2433,8 @@ async def generate_packing(
 
 #  Generate Commercial Invoice 
 
-@limiter.limit("30/minute")
 @app.post("/api/invoice")
+@limiter.limit("30/minute")
 
 async def generate_invoice(
     request: Request,

@@ -922,8 +922,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
                           {selectedCustomer && (
                             <button onClick={deleteCustomer} className="px-2 py-1.5 rounded-lg border border-red-300 text-red-500 text-xs hover:bg-red-50 cursor-pointer" title={t('workspace.export.deleteCustomer', locale)}>🗑</button>
       )}
-      {galleryImages && <ImageGallery images={galleryImages.images} initialIndex={galleryImages.index} onClose={() => setGalleryImages(null)} />}
-    </div>
+                        </div>
                         <div className="grid grid-cols-2 gap-2">
                           <input type="text" value={piBuyerAddress} onChange={e => setPiBuyerAddress(e.target.value)} placeholder={t('workspace.export.phAddress', locale)} className="px-3 py-1.5 text-sm border rounded-lg" />
                           <input type="text" value={piBuyerContact} onChange={e => setPiBuyerContact(e.target.value)} placeholder={t('workspace.export.phContact', locale)} className="px-3 py-1.5 text-sm border rounded-lg" />
@@ -1217,6 +1216,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
           )}
         </div>
       )}
+      {galleryImages && <ImageGallery images={galleryImages.images} initialIndex={galleryImages.index} onClose={() => setGalleryImages(null)} />}
     </div>
   );
 }

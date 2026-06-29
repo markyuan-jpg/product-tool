@@ -128,7 +128,11 @@ def is_scanned_pdf(pdf_path: str, text_threshold: int = 50) -> bool:
     """
     try:
         import fitz
+    try:
         doc = fitz.open(pdf_path)
+    except Exception as e:
+        logger.error(f"Failed to open PDF {pdf_path}: {e}")
+        return None
         try:
             total_chars = 0
             pages_checked = min(len(doc), 3)
