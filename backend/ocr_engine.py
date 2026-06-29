@@ -87,7 +87,11 @@ def extract_text_from_pdf_images(pdf_path: str, max_pages: int = 5) -> Optional[
         return None
     
     all_text = []
-    doc = fitz.open(pdf_path)
+    try:
+        doc = fitz.open(pdf_path)
+    except Exception as e:
+        logger.error(f"Failed to open PDF {pdf_path}: {e}")
+        return None
     
     try:
         for page_num in range(min(len(doc), max_pages)):
@@ -118,28 +122,25 @@ def extract_text_from_pdf_images(pdf_path: str, max_pages: int = 5) -> Optional[
 def is_scanned_pdf(pdf_path: str, text_threshold: int = 50) -> bool:
     """
     检测 PDF 是否为扫描件（文字量极少 → 很可能是图片 PDF）。
-    
-    Args:
-        pdf_path: PDF 文件路径
-        text_threshold: 文字字符数阈值，低于此值判为扫描件
-    
-    Returns:
-        True 如果很可能是扫描件
     """
     try:
         import fitz
+    except ImportError:
+        return False
+    
     try:
         doc = fitz.open(pdf_path)
     except Exception as e:
         logger.error(f"Failed to open PDF {pdf_path}: {e}")
-        return None
-        try:
-            total_chars = 0
-            pages_checked = min(len(doc), 3)
-            for i in range(pages_checked):
-                total_chars += len(doc[i].get_text().strip())
-            return total_chars < text_threshold
-        finally:
-            doc.close()
+        return False
+    
+    try:
+        total_chars = 0
+        pages_checked = min(len(doc), 3)
+        for i in range(pages_checked):
+            total_chars += len(doc[i].get_text().strip())
+        return total_chars < text_threshold
+    finally:
+        doc.close()
     except Exception:
         return False
