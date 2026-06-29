@@ -1027,6 +1027,13 @@ def extract_products_from_pdf_v2(pdf_path: str) -> Optional[pd.DataFrame]:
                 header_val = str(header_row[col_idx] or '').lower() if col_idx < len(header_row) else ''
                 if 'usd' in header_val or '$' in header_val or 'fob' in header_val:
                     price_currency = 'USD'
+                # 也从第一列 key 文本检测币种（如表格第一列写"Price USD"）
+                for row_idx in range(header_row_idx + 1, min(header_row_idx + 5, len(table))):
+                    if table[row_idx] and len(table[row_idx]) > 0:
+                        key0 = str(table[row_idx][0] or '').lower()
+                        if 'usd' in key0 or '$' in key0:
+                            price_currency = 'USD'
+                            break
                 for row_idx in range(header_row_idx + 1, len(table)):
                     if col_idx >= len(table[row_idx]):
                         continue
@@ -1081,14 +1088,17 @@ def extract_products_from_pdf_v2(pdf_path: str) -> Optional[pd.DataFrame]:
                                 filtered = [n for n in all_nums if 
                                             not re.search(r'(\d+V|\d+W|\d+AH|\d+KG|\d+NM)', n, re.I)]
                                 if filtered:
-                                    price_num = filtered[-1]  # 最后一个
+                                    price_num = filtered[0]  # 第一个数字(通常是单价而非total)
                                 else:
                                     price_num = all_nums[-1]
                         if price_num:
                             try:
                                 p = float(price_num.replace(',', ''))
                                 if p > 0:
-                                    price_rmb = max(price_rmb, p)
+                                    if price_rmb == 0:
+                                        price_rmb = p  # 取第一个价格(通常是单价)
+                                    else:
+                                        price_rmb = max(price_rmb, p)  # fallback: 保留已有价格
                                     # 标记币种
                                     if usd_match:
                                         m = usd_match.group(0).lower()
@@ -1156,12 +1166,16 @@ def extract_products_from_pdf_v2(pdf_path: str) -> Optional[pd.DataFrame]:
                     continue
                 price_rmb = 0
                 if price_col_idx is not None and price_col_idx < len(row):
-                    nums = re.findall(r'[\d,]+\.?\d*', str(row[price_col_idx] or ''))
+                    raw_val = str(row[price_col_idx] or '')
+                    nums = re.findall(r'[\d,]+\.?\d*', raw_val)
                     if nums:
                         try:
                             price_rmb = float(nums[0].replace(',', ''))
                         except Exception:
                             pass
+                    # 从价格值检测币种("950usd" → USD)
+                    if 'usd' in raw_val.lower() or '$' in raw_val:
+                        found_currency = 'USD'
                 specs = {}
                 for idx, val in enumerate(row):
                     if idx != model_col_idx and idx != price_col_idx:
