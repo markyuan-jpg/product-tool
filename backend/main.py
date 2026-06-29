@@ -127,6 +127,40 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50MB
 
+# Magic bytes for accepted file types
+_MAGIC_BYTES = {
+    b'PK\x03\x04': '.xlsx',   # ZIP-based (xlsx, docx both use ZIP)
+    b'%PDF': '.pdf',
+    b'\xd0\xcf\x11\xe0': '.xls',  # OLE2 (old Excel)
+}
+_ZIP_MIMES = {'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
+              'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx'}
+
+def _validate_file_type(filename: str, content: bytes) -> bool:
+    """Magic byte + extension double check."""
+    ext = os.path.splitext(filename)[1].lower()
+    allowed = {'.xlsx', '.xls', '.pdf', '.docx'}
+    if ext not in allowed:
+        return False
+    # ZIP-based check (xlsx/docx share PK magic)
+    for magic, expected_ext in _MAGIC_BYTES.items():
+        if content.startswith(magic):
+            if magic == b'PK\x03\x04':
+                # Further distinguish xlsx vs docx via MIME in ZIP
+                import zipfile, io
+                try:
+                    with zipfile.ZipFile(io.BytesIO(content)) as z:
+                        ct = z.read('[Content_Types].xml').decode('utf-8', errors='ignore')
+                        for mime, mext in _ZIP_MIMES.items():
+                            if mime in ct and mext == ext:
+                                return True
+                    # Content_Types not found, accept as fallback
+                    return ext in ('.xlsx', '.docx')
+                except Exception:
+                    return ext in ('.xlsx', '.docx')
+            return expected_ext == ext
+    return False  # Unknown magic bytes
+
 DEFAULT_PAYMENT_TERMS = "本合同签订七个工作日内支付定金30%,收到定金后30日内交货,发货前付清剩余70%余款 Terms of payment: The 30% deposit shall be paid within 7 working days after contract signed, with delivery to be completed within 60 days upon receipt of the deposit. The remaining 70% balance must be paid in full prior to shipment."
 
 
@@ -159,6 +193,11 @@ async def limit_upload_size(file: UploadFile) -> bytes:
     if len(content) > MAX_UPLOAD_BYTES:
 
         raise HTTPException(413, f"文件超过 {MAX_UPLOAD_BYTES // 1024 // 1024}MB 限制,请压缩后重试")
+
+    # Magic byte 校验：确保文件内容与扩展名匹配
+    filename = getattr(file, 'filename', '') or ''
+    if filename and not _validate_file_type(filename, content):
+        raise HTTPException(400, "文件类型不支持或文件已损坏，仅接受 .xlsx / .xls / .pdf / .docx")
 
     return content
 
@@ -252,7 +291,7 @@ async def session_middleware(request: Request, call_next):
             secure=request.url.scheme == "https",
             samesite="none" if request.url.scheme == "https" else "lax",
             max_age=365 * 24 * 3600,
-            domain=".quoteflow.it.com" if "quoteflow" in str(request.url.hostname) else None,
+            domain=os.getenv("SESSION_DOMAIN", ".quoteflow.it.com") if "quoteflow" in str(request.url.hostname) else None,
         )
     return response
 
@@ -1294,8 +1333,13 @@ async def upload_logo(file: UploadFile = File(...), user: dict = Depends(get_ses
     return {"path": str(logo_path)}
 
 
-# Bank info storage (replaces localStorage)
-BANK_INFO_FILE = os.path.join(os.path.dirname(__file__), "data", "bank_info.json")
+# Bank info storage — per-session isolation (replaces localStorage)
+BANK_INFO_DIR = os.path.join(os.path.dirname(__file__), "data")
+
+def _get_bank_file(user) -> str:
+    uid = getattr(user, 'id', 'default') if user else 'default'
+    uid_safe = str(uid).replace('/', '_').replace('\\', '_')[:64]
+    return os.path.join(BANK_INFO_DIR, f"bank_info_{uid_safe}.json")
 
 @app.post("/api/bank/save")
 async def save_bank_info(
@@ -1305,7 +1349,7 @@ async def save_bank_info(
     account_no: str = Form(""),
     swift_code: str = Form(""),
     user: User = Depends(get_session_id)):
-    os.makedirs(os.path.dirname(BANK_INFO_FILE), exist_ok=True)
+    os.makedirs(BANK_INFO_DIR, exist_ok=True)
     data = {
         "beneficiary": beneficiary,
         "bank_name": bank_name,
@@ -1313,14 +1357,14 @@ async def save_bank_info(
         "account_no": account_no,
         "swift_code": swift_code,
     }
-    with open(BANK_INFO_FILE, "w") as f:
+    with open(_get_bank_file(user), "w") as f:
         json.dump(data, f)
     return {"status": "ok"}
 
 @app.get("/api/bank/load")
 async def load_bank_info(user: User = Depends(get_session_id)):
     try:
-        with open(BANK_INFO_FILE, "r") as f:
+        with open(_get_bank_file(user), "r") as f:
             return json.load(f)
     except Exception:
         return {}
@@ -1388,7 +1432,7 @@ async def parse_file(
                 uni_result, spec_result = await asyncio.gather(uni_fut, spec_fut)
                 return uni_result, spec_result
 
-            uni_result, spec_result = await _run_both()
+            uni_result, spec_result = await asyncio.wait_for(_run_both(), timeout=300)  # 5分钟服务端超时
             df, ptype, count, cache_key = uni_result
             df2 = spec_result
             if count > 0:
@@ -1866,7 +1910,7 @@ async def generate_quotation(
 
     try:
         loop = asyncio.get_event_loop()
-        await loop.run_in_executor(
+        await asyncio.wait_for(loop.run_in_executor(
             None,
             functools.partial(
                 create_quotation,
@@ -1887,7 +1931,7 @@ async def generate_quotation(
                 delivery_time=delivery_time,
                 validity_days=validity_days,
             ),
-        )
+        ), timeout=300)  # 5分钟超时
 
     except Exception as e:
 
