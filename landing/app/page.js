@@ -7,6 +7,7 @@ import { friendlyError } from '@/lib/errors';
 import { useLocale, t } from '@/lib/i18n';
 import Nav from '@/components/Nav';
 import Footer from '@/components/Footer';
+import { useToast } from '@/components/Toast';
 
 const features = [
   { icon: '\uD83D\uDD0D', key: 'autoParse' },
@@ -16,6 +17,7 @@ const features = [
 
 export default function Home() {
   const { locale, ready } = useLocale();
+  const toast = useToast();
   const [dragOver, setDragOver] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState(null);
@@ -73,7 +75,7 @@ export default function Home() {
     if (processingRef.current || fileEntries.length >= MAX_FREE_FILES) return;
     processingRef.current = true;
     const valid = ['.xlsx', '.xls', '.pdf', '.docx'].some(ext => file.name.toLowerCase().endsWith(ext));
-    if (!valid) { alert('仅支持 .xlsx / .xls / .pdf / .docx'); processingRef.current = false; return; }
+    if (!valid) { toast.addToast(locale === 'zh' ? '仅支持 .xlsx / .xls / .pdf / .docx 格式' : 'Only .xlsx / .xls / .pdf / .docx supported', { type: 'error' }); processingRef.current = false; return; }
     setParsing(true); setParseError(null);
     try {
       const fd = new FormData(); fd.append('file', file);
@@ -152,7 +154,7 @@ export default function Home() {
         const a = document.createElement('a'); a.href = url; a.download = '报价单_' + Date.now() + '.xlsx'; document.body.appendChild(a); a.click(); document.body.removeChild(a);
         URL.revokeObjectURL(url);
       }
-    } catch (err) { alert('生成报价单失败：' + friendlyError(err)); }
+    } catch (err) { toast.addToast(t('home.generateError', locale) + '：' + friendlyError(err), { type: 'error' }); }
     setGenerating(false);
   };
 
@@ -168,7 +170,7 @@ export default function Home() {
       if (d.company?.company_name) setCompanyName(d.company.company_name);
       if (d.company?.contact) setCompanyContact(d.company.contact);
       if (d.company?.phone) setCompanyPhone(d.company.phone);
-    } catch (err) { alert(friendlyError(err)); }
+    } catch (err) { toast.addToast(t('home.templateError', locale) + '：' + friendlyError(err), { type: 'error' }); }
     setTemplateUploading(false);
   };
 

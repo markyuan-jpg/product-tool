@@ -4,6 +4,7 @@ import ClientLayout from "@/components/ClientLayout";
 import { Analytics } from "@vercel/analytics/next";
 import { LocaleProvider } from "@/lib/i18n";
 import SentryInit from "@/components/SentryInit";
+import { ToastProvider } from "@/components/Toast";
 
 const notoSansSC = Noto_Sans_SC({
   subsets: ["latin"],
@@ -39,7 +40,7 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="zh-CN" className={`${notoSansSC.variable} ${inter.variable}`}>
-      <body className="min-h-screen flex flex-col font-sans"><SentryInit /><LocaleProvider><ClientLayout>{children}</ClientLayout></LocaleProvider><Analytics /></body>
+      <body className="min-h-screen flex flex-col font-sans"><SentryInit /><ToastProvider><LocaleProvider><ClientLayout>{children}</ClientLayout></LocaleProvider></ToastProvider><Analytics /></body>
     </html>
   );
 }

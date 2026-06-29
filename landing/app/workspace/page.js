@@ -7,6 +7,7 @@ import API_BASE from '@/lib/api';
 import { friendlyError } from '@/lib/errors';
 import Nav from '@/components/Nav';
 import Footer from '@/components/Footer';
+import { useToast } from '@/components/Toast';
 
 // 带超时的 fetch 封装
 async function fetchWithTimeout(url, options = {}, timeoutMs = 30000) {
@@ -59,6 +60,7 @@ export default function WorkspacePage() {
 
 function UploadSection({ onSaveSuccess, user }) {
   const { locale } = useLocale();
+  const toast = useToast();
   const [inputTab, setInputTab2] = useState('file');
   const setInputTab = (tab) => setInputTab2(tab);
   const [dragOver, setDragOver] = useState(false);
@@ -77,7 +79,7 @@ function UploadSection({ onSaveSuccess, user }) {
 
   const handleFile = async (file) => {
     const valid = ['.xlsx', '.xls', '.pdf', '.docx'].some(e => file.name.toLowerCase().endsWith(e));
-    if (!valid) { alert(t('workspace.upload.onlySupport', locale)); return; }
+    if (!valid) { toast.addToast(t('workspace.upload.onlySupport', locale), { type: 'error' }); return; }
     setParsing(true); setParseError(null);
     try {
       const fd = new FormData(); fd.append('file', file);
@@ -245,6 +247,7 @@ function UploadSection({ onSaveSuccess, user }) {
 
 function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
   const { locale } = useLocale();
+  const toast = useToast();
   const [products, setProducts] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -335,7 +338,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
       const d = await r.json(); setProducts(d.products || []); setTotal(d.total || 0);
     } catch (err) {
       console.error(err); setProducts([]);
-      alert(t('workspace.productLib.loadingFailed', locale) + ': ' + (err.message === 'Failed to fetch' ? t('workspace.upload.connectionFailed', locale) : err.message));
+      toast.addToast(t('workspace.productLib.loadingFailed', locale), { type: 'error' });
     }
     setLoading(false);
   }, [locale]);
@@ -380,7 +383,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
       }, 15000);
       if (!r.ok) throw new Error(t('workspace.productLib.deleteFailed', locale));
       setSelected(new Set()); fetchProducts();
-    } catch (err) { alert(t('workspace.productLib.deleteFailed', locale) + '：' + friendlyError(err)); }
+    } catch (err) { toast.addToast(t('workspace.productLib.deleteFailed', locale), { type: 'error' }); }
   };
 
   const handleDelete = async (id) => {
@@ -389,7 +392,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
       const r = await fetchWithTimeout(API_BASE + '/api/products/' + id, { method: 'DELETE', headers: { ...SID() }, credentials: 'include' }, 15000);
       if (!r.ok) throw new Error(t('workspace.productLib.deleteFailed', locale));
       fetchProducts();
-    } catch (err) { alert(t('workspace.productLib.deleteFailed', locale) + '：' + friendlyError(err)); }
+    } catch (err) { toast.addToast(t('workspace.productLib.deleteFailed', locale), { type: 'error' }); }
   };
 
   const saveCustomer = () => {
@@ -430,7 +433,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
       price_cny: p.price_cny || 0,
       spec_zh: [p.spec_zh, p.price_raw].filter(Boolean).join(' | '),
     }));
-    if (sel.length === 0) { alert(t('workspace.export.selectFirst', locale)); return; }
+    if (sel.length === 0) { toast.addToast(t('workspace.export.selectFirst', locale), { type: 'error' }); return; }
     // 根据 selectedColumns 清空未选列数据
     const colMap = {model:['model','name_zh','name_en'],spec:['spec_zh','spec'],qty:['qty'],price:['price_rmb','price'],price_cny:['price_cny'],photo:['_image_path','image_path'],nw:['net_weight'],gw:['gross_weight'],ctn:['carton_size'],cbm:['cbm'],upc:['units_per_carton']};
     const colEmpty = {model:'',spec:'',qty:1,price:0,price_cny:0,photo:'',nw:0,gw:0,ctn:'',cbm:0,upc:0};
@@ -533,7 +536,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
       }
       fetchProducts();
       if (onQuotationGenerated) onQuotationGenerated();
-    } catch (err) { alert(t('workspace.upload.generateFailed', locale) + '：' + friendlyError(err)); }
+    } catch (err) {       toast.addToast(t('workspace.upload.generateFailed', locale), { type: 'error' }); }
     finally { setExportLoading(false); setExportStatus(''); }
   };
 
@@ -547,7 +550,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
       price_cny: p.price_cny || 0,
       spec_zh: [p.spec_zh, p.price_raw].filter(Boolean).join(' | '),
     }));
-    if (sel.length === 0) { alert(t('workspace.export.selectFirst', locale)); return; }
+    if (sel.length === 0) { toast.addToast(t('workspace.export.selectFirst', locale), { type: 'error' }); return; }
     // 根据 selectedColumns 清空未选列数据
     const colMap = {model:['model','name_zh','name_en'],spec:['spec_zh','spec'],qty:['qty'],price:['price_rmb','price'],price_cny:['price_cny'],photo:['_image_path','image_path'],nw:['net_weight'],gw:['gross_weight'],ctn:['carton_size'],cbm:['cbm'],upc:['units_per_carton']};
     const colEmpty = {model:'',spec:'',qty:1,price:0,price_cny:0,photo:'',nw:0,gw:0,ctn:'',cbm:0,upc:0};
@@ -639,7 +642,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
         }
       }
       if (onQuotationGenerated) onQuotationGenerated();
-    } catch (err) { alert(t('workspace.export.allExportFailed', locale) + '：' + friendlyError(err)); }
+    } catch (err) {       toast.addToast(t('workspace.export.allExportFailed', locale), { type: 'error' }); }
     finally { setExportLoading(false); setExportStatus(''); }
   };
 
@@ -1130,6 +1133,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
 
 function QuotationHistorySection({ refreshKey }) {
   const { locale } = useLocale();
+  const toast = useToast();
   const [quotations, setQuotations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -1169,7 +1173,7 @@ function QuotationHistorySection({ refreshKey }) {
       const cd = r.headers.get('content-disposition');
       a.download = cd ? cd.split('filename=')[1]?.replace(/"/g, '') || 'quotation.xlsx' : 'quotation.xlsx';
       document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(a.href);
-    } catch (err) { alert(t('workspace.quotationHistory.downloadFailed', locale) + '：' + friendlyError(err)); }
+    } catch (err) {       toast.addToast(t('workspace.quotationHistory.downloadFailed', locale), { type: 'error' }); }
   };
 
   const handleDelete = async (id) => {
@@ -1178,7 +1182,7 @@ function QuotationHistorySection({ refreshKey }) {
       const r = await fetchWithTimeout(API_BASE + '/api/quotations/' + id, { method: 'DELETE', headers: { ...SID() }, credentials: 'include' }, 15000);
       if (!r.ok) throw new Error(t('workspace.quotationHistory.deleteFailed', locale));
       fetchQuotations();
-    } catch (err) { alert(t('workspace.quotationHistory.deleteFailed', locale) + '：' + friendlyError(err)); }
+    } catch (err) {       toast.addToast(t('workspace.quotationHistory.deleteFailed', locale), { type: 'error' }); }
   };
 
   const handleBatchDelete = async () => {
@@ -1193,7 +1197,7 @@ function QuotationHistorySection({ refreshKey }) {
       }, 15000);
       if (!r.ok) throw new Error(t('workspace.quotationHistory.deleteFailed', locale));
       fetchQuotations();
-    } catch (err) { alert(t('workspace.quotationHistory.deleteFailed', locale) + '：' + friendlyError(err)); }
+    } catch (err) {       toast.addToast(t('workspace.quotationHistory.deleteFailed', locale), { type: 'error' }); }
   };
 
   const handleDeleteAll = async () => {
@@ -1209,7 +1213,7 @@ function QuotationHistorySection({ refreshKey }) {
       }, 15000);
       if (!r.ok) throw new Error(t('workspace.quotationHistory.deleteFailed', locale));
       fetchQuotations();
-    } catch (err) { alert(t('workspace.quotationHistory.deleteFailed', locale) + '：' + friendlyError(err)); }
+    } catch (err) {       toast.addToast(t('workspace.quotationHistory.deleteFailed', locale), { type: 'error' }); }
   };
 
   return (
