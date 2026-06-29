@@ -73,11 +73,6 @@ function UploadSection({ onSaveSuccess, user }) {
   const [failedImages, setFailedImages] = useState(new Set());
   const [galleryImages, setGalleryImages] = useState(null);  // { images: string[], index: number }
   const inputRef = useRef(null);
-  const [pasteText, setPasteText] = useState('');
-  const [pasteImages, setPasteImages] = useState([]);
-  const [pasting, setPasting] = useState(false);
-  const [pasteError, setPasteError] = useState(null);
-  const pasteInputRef = useRef(null);
   const lastFileRef = useRef(null);  // 用于重试解析
 
   const handleFile = async (file) => {
@@ -103,9 +98,9 @@ function UploadSection({ onSaveSuccess, user }) {
     }
   };
 
-  const handleDrop = useCallback((e) => { e.preventDefault(); e.stopPropagation(); setDragOver(false); const f = e.dataTransfer.files[0]; if (f) handleFile(f); }, []);
+  const handleDrop = useCallback((e) => { e.preventDefault(); e.stopPropagation(); setDragOver(false); Array.from(e.dataTransfer.files).forEach(f => handleFile(f)); }, []);
   const handleClick = () => inputRef.current?.click();
-  const handleFileSelect = (e) => { const f = e.target.files[0]; if (f) handleFile(f); };
+  const handleFileSelect = (e) => { Array.from(e.target.files).forEach(f => handleFile(f)); };
 
   const saveToLib = async () => {
     if (products.length === 0) return;
@@ -120,45 +115,7 @@ function UploadSection({ onSaveSuccess, user }) {
     setSaving(false);
   };
 
-  const reset = () => { setParsing(false); setParseError(null); setProducts([]); setSaveMsg(null); setPasteText(''); setPasteImages([]); setPasteError(null); };
-
-  const handlePasteDrop = useCallback((e) => {
-    e.preventDefault(); e.stopPropagation();
-    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
-    if (files.length > 0) setPasteImages(prev => [...prev, ...files]);
-  }, []);
-
-  const handlePasteImageSelect = (e) => {
-    const files = Array.from(e.target.files).filter(f => f.type.startsWith('image/'));
-    if (files.length > 0) setPasteImages(prev => [...prev, ...files]);
-  };
-
-  const removePasteImage = (idx) => setPasteImages(prev => prev.filter((_, i) => i !== idx));
-
-  const handlePasteParse = async () => {
-    if (!pasteText.trim()) return;
-    setPasting(true); setPasteError(null);
-    try {
-      const res = await fetch(API_BASE + '/api/parse-text-products', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: pasteText }),
-      });
-      if (!res.ok) { const e = await res.json().catch(() => ({ detail: t('workspace.upload.parseError', locale) })); throw new Error(e.detail || t('workspace.upload.serverError', locale)); }
-      const d = await res.json();
-      setProducts(d.products || []);
-      // Match images to products by model number
-      if (pasteImages.length > 0 && d.products?.length > 0) {
-        const updated = (d.products || []).map(p => {
-          const match = pasteImages.find(img => img.name.toLowerCase().includes((p.model || '').toLowerCase()));
-          if (match) p._image_path = URL.createObjectURL(match);
-          return p;
-        });
-        setProducts(updated);
-      }
-      setPasting(false);
-    } catch (err) { setPasteError(err.message); setPasting(false); }
-  };
+  const reset = () => { setParsing(false); setParseError(null); setProducts([]); setSaveMsg(null); };
 
   return (
     <div>
@@ -176,7 +133,7 @@ function UploadSection({ onSaveSuccess, user }) {
             onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
             onDragEnter={() => setDragOver(true)} onDragLeave={() => setDragOver(false)}
             onDrop={handleDrop} onClick={handleClick}>
-            <input ref={inputRef} type="file" accept=".xlsx,.xls,.pdf,.docx" className="hidden" onChange={handleFileSelect} />
+            <input ref={inputRef} type="file" accept=".xlsx,.xls,.pdf,.docx" multiple className="hidden" onChange={handleFileSelect} />
             {!parsing && !parseError ? (
               <div className="flex flex-col items-center gap-3">
                 <svg className="w-10 h-10 text-[var(--navy-light)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">

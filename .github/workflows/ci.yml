@@ -25,8 +25,7 @@ jobs:
           pip install pytest pytest-asyncio httpx
 
       - name: Run backend tests
-        run: python -m pytest tests/ -v --tb=short 2>&1 || echo "WARN: tests not yet created"
-        continue-on-error: true
+        run: python -m pytest tests/ -v --tb=short
 
   frontend-lint:
     runs-on: ubuntu-latest
@@ -43,6 +42,24 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint
-        run: npx next lint 2>&1 || echo "WARN: lint issues found"
+      - name: Check types and lint
+        run: npx next lint
         continue-on-error: true
+
+  frontend-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: landing
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build

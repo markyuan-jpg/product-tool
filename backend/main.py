@@ -105,7 +105,7 @@ async def lifespan(app: FastAPI):
         logger.error(f"Database init on startup failed: {e}")
     yield
 
-app = FastAPI(title="报价整合工具 API", version="1.0.0", max_upload_size=100_000_000, lifespan=lifespan)
+app = FastAPI(title="报价整合工具 API", version="1.0.0", max_upload_size=50_000_000, lifespan=lifespan)
 
 #  限流 — 支持 nginx 代理获取真实 IP
 def _get_real_ip(request: Request) -> str:
@@ -198,7 +198,7 @@ def _load_company_config() -> dict:
 
 import starlette.datastructures
 
-starlette.datastructures.MAX_MEMORY_SIZE = 100_000_000  # 100MB for form fields
+starlette.datastructures.MAX_MEMORY_SIZE = 50_000_000  # 50MB for form fields
 
 
 # Initialize DBs on startup (fail gracefully if PostgreSQL unavailable)
@@ -271,11 +271,14 @@ async def cors_error_handler(request, exc):
         "Access-Control-Allow-Methods": "*",
         "Access-Control-Allow-Headers": "*",
     }
-    status = 500
-    detail = str(exc) if str(exc) else "Internal Server Error"
     if hasattr(exc, 'status_code'):
         status = exc.status_code
-        detail = exc.detail if hasattr(exc, 'detail') else detail
+        detail = exc.detail if hasattr(exc, 'detail') else str(exc)
+    else:
+        # 非预期异常：记录详细日志，客户端只返回通用信息
+        logger.error(f"Unhandled error on {request.method} {request.url.path}: {exc}", exc_info=True)
+        status = 500
+        detail = "服务器内部错误，请稍后重试"
     return JSONResponse(status_code=status, content={"detail": detail}, headers=headers)
 
 
@@ -294,8 +297,11 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-XSS-Protection"] = "1; mode=block"
 
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
 
-    response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
+    # HSTS: 仅在 HTTPS 环境下启用（避免污染本地开发环境 localhost）
+    if request.url.scheme == "https" and not request.url.hostname in ("localhost", "127.0.0.1", "::1"):
+        response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
 
     return response
 

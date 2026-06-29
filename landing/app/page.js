@@ -62,14 +62,14 @@ export default function Home() {
   const handleDrop = useCallback((e) => {
     e.preventDefault(); e.stopPropagation(); setDragOver(false);
     if (uploadLocked) return;
-    const file = e.dataTransfer.files[0];
-    if (file) handleFile(file);
+    const files = Array.from(e.dataTransfer.files);
+    files.forEach(f => handleFile(f));
   }, [uploadLocked, fileEntries.length]);
 
   const handleClick = () => { if (!uploadLocked) inputRef.current?.click(); };
-  const handleFileSelect = (e) => { const file = e.target.files[0]; if (file) handleFile(file); };
+  const handleFileSelect = (e) => { Array.from(e.target.files).forEach(f => handleFile(f)); };
   const handleAddFileClick = () => fileInputRef.current?.click();
-  const handleAddFileSelect = (e) => { const file = e.target.files[0]; if (file) handleFile(file); };
+  const handleAddFileSelect = (e) => { Array.from(e.target.files).forEach(f => handleFile(f)); };
 
   const handleFile = async (file) => {
     if (processingRef.current || fileEntries.length >= MAX_FREE_FILES) return;
@@ -188,7 +188,7 @@ export default function Home() {
           <div onDragOver={handleDrag} onDragEnter={() => setDragOver(true)} onDragLeave={() => setDragOver(false)}
             onDrop={handleDrop} onClick={handleClick}
             className={'w-full max-w-xl mx-auto border-2 border-dashed rounded-2xl p-10 transition-all duration-300 cursor-pointer ' + (dragOver ? 'border-[var(--gold)] bg-[var(--gold)]/5 scale-[1.02]' : 'border-[var(--border)] hover:border-[var(--navy)] hover:bg-gray-50') + (uploadLocked ? ' opacity-60' : '')}>
-            <input ref={inputRef} type="file" accept=".xlsx,.xls,.pdf,.docx" onChange={handleFileSelect} className="hidden" />
+            <input ref={inputRef} type="file" accept=".xlsx,.xls,.pdf,.docx" multiple onChange={handleFileSelect} className="hidden" />
             {parsing ? (
               <div className="flex flex-col items-center gap-3"><div className="w-9 h-9 border-[2.5px] border-[var(--navy)] border-t-transparent rounded-full animate-spin" /><p className="text-sm">{t('home.hero.parsing', locale)}</p></div>
             ) : uploadLocked ? (
@@ -249,7 +249,7 @@ export default function Home() {
                 </label>
               )}
               {!uploadLocked && <button onClick={handleAddFileClick} className="file-tab-add" title={t('home.addFile', locale)}>+</button>}
-              <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.pdf,.docx" onChange={handleAddFileSelect} className="hidden" />
+              <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.pdf,.docx" multiple onChange={handleAddFileSelect} className="hidden" />
             </div>
 
             {/* Count + CTA */}

@@ -22,6 +22,7 @@ TEMP_IMAGE_FOLDER = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname
 # ─── 图片提取缓存 ───
 
 _image_cache = {}
+_MAX_IMAGE_CACHE = 50  # 最多缓存 50 个文件的提取结果
 
 def _cache_key(file_path: str) -> str:
     """生成缓存 key：文件路径 + 修改时间戳"""
@@ -31,11 +32,20 @@ def _cache_key(file_path: str) -> str:
     except OSError:
         return file_path
 
+def _cache_put(key: str, value):
+    global _image_cache
+    if len(_image_cache) >= _MAX_IMAGE_CACHE:
+        # 移除最旧的条目（Python 3.7+ dict 保持插入顺序）
+        oldest = next(iter(_image_cache))
+        del _image_cache[oldest]
+    _image_cache[key] = value
+
 # ─── 图片压缩（生成时使用，避免原始分辨率嵌入） ───
 
 MAX_IMAGE_WIDTH = 1200
 JPEG_QUALITY = 95
 _resize_cache = {}
+_MAX_RESIZE_CACHE = 200  # 最多缓存 200 张缩略图
 
 def resize_image(path: str, max_w: int = MAX_IMAGE_WIDTH, quality: int = JPEG_QUALITY) -> Union[io.BytesIO, str]:
     global _resize_cache
@@ -76,6 +86,9 @@ def resize_image(path: str, max_w: int = MAX_IMAGE_WIDTH, quality: int = JPEG_QU
     save_kw = {'format': fmt, 'quality': quality} if fmt == 'JPEG' else {'format': fmt}
     img.save(buf, **save_kw)
     buf.seek(0)
+    if len(_resize_cache) >= _MAX_RESIZE_CACHE:
+        oldest = next(iter(_resize_cache))
+        del _resize_cache[oldest]
     _resize_cache[key] = buf
     return buf
 
@@ -470,7 +483,7 @@ def extract_embedded_images(file_path: str, image_col: Optional[int] = None) -> 
         pass
 
     if image_col is None:
-        _image_cache[ck] = result
+        _cache_put(ck, result)
     return result
 
 
