@@ -8,6 +8,7 @@ import { useLocale, t } from '@/lib/i18n';
 import Nav from '@/components/Nav';
 import Footer from '@/components/Footer';
 import { useToast } from '@/components/Toast';
+import { track } from '@/lib/analytics';
 
 const features = [
   { icon: '\uD83D\uDD0D', key: 'autoParse' },
@@ -100,6 +101,7 @@ export default function Home() {
     { model: 'CL-300', name_zh: 'LED台灯', spec_zh: '无级调光 / 色温2700-6500K / USB供电 / 折叠便携', price_rmb: 35.00, currency: 'CNY', category: '家居用品' },
   ];
   const handleDemo = () => {
+    track('demo_click');
     setFileEntries([{ name: locale === 'zh' ? '示例产品.xlsx' : 'demo_products.xlsx', products: demoProducts, dedupCount: null }]);
     setCheckedFiles(new Set([0]));
   };

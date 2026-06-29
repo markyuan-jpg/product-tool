@@ -10,6 +10,7 @@ import Nav from '@/components/Nav';
 import Footer from '@/components/Footer';
 import { useToast } from '@/components/Toast';
 import ImageGallery from '@/components/ImageGallery';
+import { track } from '@/lib/analytics';
 
 // 带超时的 fetch 封装
 async function fetchWithTimeout(url, options = {}, timeoutMs = 30000) {
@@ -44,6 +45,7 @@ export default function WorkspacePage() {
   const [usage, setUsage] = useState(null);
   const [productRefreshKey, setProductRefreshKey] = useState(0);
   const [quotationRefreshKey, setQuotationRefreshKey] = useState(0);
+  const [stats, setStats] = useState(null);
 
   useEffect(() => {
     // 已登录 → 使用真实用户；未登录 → 匿名 GuestUser
@@ -53,6 +55,8 @@ export default function WorkspacePage() {
     } else {
       setUser({ username: 'guest', tier: 'pro' });
     }
+    // 加载统计数据
+    fetch(API_BASE + '/api/event/stats?days=1').then(r => r.json()).then(setStats).catch(() => {});
   }, []);
 
   if (!ready) return null;
@@ -65,6 +69,14 @@ export default function WorkspacePage() {
         <ProductLibrarySection refreshKey={productRefreshKey} user={user} onQuotationGenerated={() => setQuotationRefreshKey(k => k + 1)} />
         <QuotationHistorySection refreshKey={quotationRefreshKey} />
       </main>
+      {stats && stats.total_events > 0 && (
+        <div className="max-w-6xl mx-auto px-4 pb-4">
+          <div className="border-t border-[var(--border)] pt-3 flex items-center gap-4 text-xs text-[var(--text-secondary)]">
+            <span>📊 {locale === 'zh' ? '今日' : 'Today'}: {stats.by_event?.upload_start || 0} {locale === 'zh' ? '次上传' : 'uploads'}, {stats.by_event?.generate_start || 0} {locale === 'zh' ? '次生成' : 'generations'}, {stats.by_event?.download || 0} {locale === 'zh' ? '次下载' : 'downloads'}</span>
+            <span className="opacity-50">· {stats.unique_sessions || 0} {locale === 'zh' ? '位用户' : 'users'}</span>
+          </div>
+        </div>
+      )}
       <Footer />
     </div>
   );
@@ -90,6 +102,8 @@ function UploadSection({ onSaveSuccess, user }) {
     const valid = ['.xlsx', '.xls', '.pdf', '.docx', '.jpg', '.jpeg', '.png', '.webp'].some(e => file.name.toLowerCase().endsWith(e));
     if (!valid) { toast.addToast(t('workspace.upload.onlySupport', locale), { type: 'error' }); return; }
     lastFileRef.current = file;
+    const ext = file.name.split('.').pop().toLowerCase();
+    track('upload_start', { format: ext, size: file.size });
     setParsing(true); setParseError(null);
     try {
       const fd = new FormData(); fd.append('file', file);
@@ -98,12 +112,16 @@ function UploadSection({ onSaveSuccess, user }) {
       clearTimeout(tid);
       if (!res.ok) { const e = await res.json().catch(() => ({ detail: t('workspace.upload.parseError', locale) })); throw new Error(e.detail || t('workspace.upload.serverError', locale)); }
       const d = await res.json(); setProducts(d.products || []);
+      const count = (d.products || []).length;
+      track(count > 0 ? 'parse_success' : 'parse_empty', { format: ext, product_count: count, source: d.source });
       setParsing(false);
     } catch (err) {
       if (err.name === 'AbortError') {
         setParseError(t('workspace.upload.parseTimeout', locale));
+        track('parse_timeout', { format: ext });
       } else {
         setParseError(err.message);
+        track('parse_fail', { format: ext, error: err.message });
       }
       setParsing(false);
     }
@@ -409,6 +427,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
   };
 
   const handleExport = async () => {
+    track('generate_start', { type: exportType, product_count: selected.size });
     const sel = products.filter(p => selected.has(p.id)).map(p => ({
       ...p,
       qty: getQty(p.id) > 1 ? getQty(p.id) : (parseInt(p.qty) || 1),
@@ -509,6 +528,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
           if (dlR.ok) {
             const blob = await dlR.blob();
             const dlUrl = URL.createObjectURL(blob);
+            track('download', { type: exportType, product_count: selected.size });
             const a = document.createElement('a'); a.href = dlUrl; a.download = data.name || filename; document.body.appendChild(a); a.click(); document.body.removeChild(a);
             setTimeout(() => URL.revokeObjectURL(dlUrl), 5000);
           }
@@ -516,6 +536,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
       } else {
         const blob = await r.blob();
         const dlUrl = URL.createObjectURL(blob);
+        track('download', { type: exportType, product_count: selected.size });
         const a = document.createElement('a'); a.href = dlUrl; a.download = filename; document.body.appendChild(a); a.click(); document.body.removeChild(a);
         setTimeout(() => URL.revokeObjectURL(dlUrl), 5000);
       }

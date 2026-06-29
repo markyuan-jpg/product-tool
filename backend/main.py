@@ -527,6 +527,30 @@ async def exchange_rate(from_currency: str = Query("USD"), to_currency: str = Qu
         raise HTTPException(502, f"获取汇率失败: {str(e)}")
 
 
+# ─── 埋点端点 ───
+
+from analytics import track_event, get_stats
+
+@app.post("/api/event")
+async def record_event(request: Request):
+    """记录用户行为事件"""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    event = body.get('event', 'unknown')
+    sid = getattr(request.state, 'session_id', '')
+    payload = body.get('payload', {})
+    track_event(event, session_id=sid, payload=payload)
+    return {"status": "ok"}
+
+
+@app.get("/api/event/stats")
+async def event_stats(days: int = 7):
+    """获取埋点统计摘要"""
+    return get_stats(days=days)
+
+
 #  Auth endpoints
 
 @app.post("/api/auth/register")
