@@ -685,25 +685,28 @@ def match_images_to_products(df, file_path: str) -> 'pd.DataFrame':
     if '_row' not in df.columns:
         return df
 
-    # 检测所有产品图片列（多个图片列都提取）
+    # 检测所有产品图片列（多个图片列都提取）。未检测到图片列时兜底提取全部图片
     image_cols = _detect_image_column(file_path)
-    if not image_cols:
-        return df
-    
-    # 合并所有图片列的图片（同一行有多列图片时拼接路径）
     img_map = {}
-    for ic in image_cols:
-        imgs = extract_embedded_images(file_path, image_col=ic)
-        for s_name, s_rows in imgs.items():
-            if s_name not in img_map:
-                img_map[s_name] = {}
-            for r, path in s_rows.items():
-                if r in img_map[s_name]:
-                    # 同行的第二张图片：在已有路径后追加
-                    existing = img_map[s_name][r]
-                    img_map[s_name][r] = existing + '||' + path if '||' not in existing else existing
-                else:
-                    img_map[s_name][r] = path
+    if not image_cols:
+        # 没有明确的图片列 → 抓取所有能找到的图片（兼容无"图片"表头的文件）
+        img_map = extract_embedded_images(file_path, image_col=None)
+    else:
+        # 合并所有图片列的图片（同一行有多列图片时拼接路径）
+        for ic in image_cols:
+            imgs = extract_embedded_images(file_path, image_col=ic)
+            for s_name, s_rows in imgs.items():
+                if s_name not in img_map:
+                    img_map[s_name] = {}
+                for r, path in s_rows.items():
+                    if r in img_map[s_name]:
+                        existing = img_map[s_name][r]
+                        img_map[s_name][r] = existing + '||' + path if '||' not in existing else existing
+                    else:
+                        img_map[s_name][r] = path
+
+    if not img_map:
+        return df
 
     def _sheet_matches(product_sheet: str, map_sheet: str) -> bool:
         ps = str(product_sheet or '').strip().lower()
