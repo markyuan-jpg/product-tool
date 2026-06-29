@@ -46,6 +46,8 @@ export default function WorkspacePage() {
   const [productRefreshKey, setProductRefreshKey] = useState(0);
   const [quotationRefreshKey, setQuotationRefreshKey] = useState(0);
   const [stats, setStats] = useState(null);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingStep, setOnboardingStep] = useState(0);
 
   useEffect(() => {
     // 已登录 → 使用真实用户；未登录 → 匿名 GuestUser
@@ -57,13 +59,74 @@ export default function WorkspacePage() {
     }
     // 加载统计数据
     fetch(API_BASE + '/api/event/stats?days=1').then(r => r.json()).then(setStats).catch(() => {});
+    // 首次访问 → 显示引导
+    if (typeof window !== 'undefined' && !localStorage.getItem('onboarding_dismissed')) {
+      setShowOnboarding(true);
+    }
   }, []);
+
+  const dismissOnboarding = () => {
+    localStorage.setItem('onboarding_dismissed', '1');
+    setShowOnboarding(false);
+  };
+
+  const onboardingSteps = [
+    { icon: '📁', title: locale === 'zh' ? '上传产品文件' : 'Upload Product File', desc: locale === 'zh' ? '拖入 Excel/PDF/Word 或微信拍照的报价单图片' : 'Drop Excel/PDF/Word or a photo of a quotation' },
+    { icon: '🔍', title: locale === 'zh' ? '查看解析结果' : 'Review Parsed Products', desc: locale === 'zh' ? '系统自动提取型号、价格、规格，可手动编辑' : 'System auto-extracts model, price, specs. You can edit manually.' },
+    { icon: '📄', title: locale === 'zh' ? '一键生成报价单' : 'Generate Quotation', desc: locale === 'zh' ? '选择产品 → 配置公司信息 → 下载 Excel/PDF 报价单' : 'Select products → configure company info → download Excel/PDF' },
+  ];
 
   if (!ready) return null;
 
   return (
     <div className="min-h-screen bg-[var(--bg)]">
       <Nav />
+      {/* 数据持久化提示 — 仅未登录时显示 */}
+      {user && user.username === 'guest' && (
+        <div className="bg-amber-50 border-b border-amber-200">
+          <div className="max-w-6xl mx-auto px-4 py-1.5 flex items-center justify-between text-xs">
+            <span className="text-amber-700">💡 {locale === 'zh' ? '产品数据保存在浏览器中，清除缓存后丢失。' : 'Products saved in browser. Lost if cache cleared.'}</span>
+            <a href="/register" className="text-amber-700 font-medium hover:underline whitespace-nowrap ml-2">
+              {locale === 'zh' ? '免费注册 → 永久保存' : 'Free Register → Save Forever'}
+            </a>
+          </div>
+        </div>
+      )}
+      {/* 新手引导 */}
+      {showOnboarding && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center" onClick={dismissOnboarding}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md mx-4 p-6" onClick={e => e.stopPropagation()}>
+            <div className="text-center mb-4">
+              <span className="text-4xl">{onboardingSteps[onboardingStep].icon}</span>
+              <h3 className="text-lg font-bold text-[var(--navy)] mt-2">{onboardingSteps[onboardingStep].title}</h3>
+              <p className="text-sm text-[var(--text-secondary)] mt-1">{onboardingSteps[onboardingStep].desc}</p>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex gap-1.5">
+                {onboardingSteps.map((_, i) => (
+                  <div key={i} className={`w-2 h-2 rounded-full ${i === onboardingStep ? 'bg-[var(--navy)]' : 'bg-gray-300'}`} />
+                ))}
+              </div>
+              <div className="flex gap-2">
+                {onboardingStep > 0 && (
+                  <button onClick={() => setOnboardingStep(s => s - 1)} className="px-3 py-1.5 text-sm text-[var(--text-secondary)] hover:text-[var(--navy)]">
+                    {locale === 'zh' ? '上一步' : 'Back'}
+                  </button>
+                )}
+                {onboardingStep < 2 ? (
+                  <button onClick={() => setOnboardingStep(s => s + 1)} className="px-4 py-1.5 rounded-lg bg-[var(--navy)] text-white text-sm font-medium hover:bg-[var(--navy-light)]">
+                    {locale === 'zh' ? '下一步' : 'Next'}
+                  </button>
+                ) : (
+                  <button onClick={dismissOnboarding} className="px-4 py-1.5 rounded-lg bg-[var(--gold)] text-white text-sm font-medium hover:bg-[var(--gold)]/90">
+                    {locale === 'zh' ? '开始使用' : 'Get Started'}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       <main className="max-w-6xl mx-auto px-4 py-8 space-y-8">
         <UploadSection onSaveSuccess={() => setProductRefreshKey(k => k + 1)} user={user} />
         <ProductLibrarySection refreshKey={productRefreshKey} user={user} onQuotationGenerated={() => setQuotationRefreshKey(k => k + 1)} />
@@ -729,9 +792,14 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
           <div className="w-8 h-8 border-3 border-[var(--gold)] border-t-transparent rounded-full animate-spin" />
         </div>
       ) : products.length === 0 ? (
-        <div className="border border-[var(--border)] rounded-xl bg-[var(--surface)] p-12 text-center">
-          <p className="text-sm text-[var(--text-secondary)]">{t('workspace.productLib.empty', locale)}</p>
+        <div className="border-2 border-dashed border-[var(--border)] rounded-xl bg-[var(--surface)] p-12 text-center">
+          <div className="text-4xl mb-3">📦</div>
+          <p className="text-sm font-medium text-[var(--navy)]">{t('workspace.productLib.empty', locale)}</p>
           <p className="text-xs text-[var(--text-secondary)] mt-1">{t('workspace.productLib.emptyHint', locale)}</p>
+          <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            className="mt-4 px-4 py-2 rounded-lg bg-[var(--navy)] text-white text-sm hover:bg-[var(--navy-light)] cursor-pointer">
+            {locale === 'zh' ? '↑ 回到顶部上传文件' : '↑ Go to Upload'}
+          </button>
         </div>
       ) : (
         <div className="border border-[var(--border)] rounded-xl bg-[var(--surface)] overflow-hidden">
