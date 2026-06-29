@@ -89,6 +89,22 @@ export default function Home() {
     processingRef.current = false;
   };
 
+  // Demo: 无需上传即可预览效果
+  const demoProducts = [
+    { model: 'BT-001', name_zh: '蓝牙耳机', spec_zh: '蓝牙5.3 / 续航8h / IPX5防水 / Type-C充电', price_rmb: 45.00, currency: 'CNY', category: '电子产品' },
+    { model: 'BP-200', name_zh: '移动电源 20000mAh', spec_zh: '22.5W快充 / USB-C+双USB-A / LED电量显示 / 20000mAh', price_rmb: 68.00, currency: 'CNY', category: '电子产品' },
+    { model: 'WK-500', name_zh: '智能手表', spec_zh: '1.43英寸AMOLED / 心率血氧监测 / IP68防水 / 14天续航', price_rmb: 129.00, currency: 'CNY', category: '智能穿戴' },
+    { model: 'SP-100', name_zh: '蓝牙音箱', spec_zh: '20W输出 / IPX7防水 / TWS串联 / 12h续航', price_rmb: 89.00, currency: 'CNY', category: '电子产品' },
+    { model: 'CL-300', name_zh: 'LED台灯', spec_zh: '无级调光 / 色温2700-6500K / USB供电 / 折叠便携', price_rmb: 35.00, currency: 'CNY', category: '家居用品' },
+  ];
+  const [demoLoaded, setDemoLoaded] = useState(false);
+  const handleDemo = () => {
+    if (demoLoaded) return;
+    setFileEntries([{ name: locale === 'zh' ? '示例产品.xlsx' : 'demo_products.xlsx', products: demoProducts, dedupCount: null }]);
+    setCheckedFiles(new Set([0]));
+    setDemoLoaded(true);
+  };
+
   const toggleFile = (idx) => {
     setCheckedFiles(prev => {
       if (prev.has(idx) && prev.size <= 1) return prev;
@@ -188,6 +204,12 @@ export default function Home() {
               </div>
             )}
           </div>
+          {!demoLoaded && !uploadLocked && (
+            <button onClick={handleDemo}
+              className="mt-4 px-5 py-2 rounded-lg bg-[var(--gold)] text-white text-sm font-medium hover:bg-[var(--gold)]/90 transition-colors cursor-pointer">
+              {locale === 'zh' ? '🎯 试试 Demo（无需上传）' : '🎯 Try Demo (No Upload Needed)'}
+            </button>
+          )}
         </div>
 
         {/* Error */}
