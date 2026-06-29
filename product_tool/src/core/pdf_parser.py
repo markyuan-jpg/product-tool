@@ -84,7 +84,7 @@ def extract_images_from_pdf(pdf_path: str, output_dir: str = None) -> List[Dict]
     
     for page_num in range(len(doc)):
         page = doc[page_num]
-        img_list = page.get_images()
+        img_list = page.get_images(full=True)
         
         for img_index, img in enumerate(img_list):
             try:
@@ -816,7 +816,7 @@ def extract_products_from_pdf_v2(pdf_path: str) -> Optional[pd.DataFrame]:
     
     all_products = []
     
-    for target_table in tables:
+    for ti, target_table in enumerate(tables):
         if not target_table or len(target_table) < 2:
             continue
         
