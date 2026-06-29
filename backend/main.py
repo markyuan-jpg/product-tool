@@ -1567,18 +1567,27 @@ async def parse_file(
             # 并行执行通用解析器和专用解析器
             from run import parse_file as run_parse_file
             loop = asyncio.get_event_loop()
+            
+            # 大文件(>20MB)跳过专用解析器避免超时
+            file_size_mb = len(content) / (1024 * 1024)
+            if file_size_mb > 20:
+                logger.info(f"File {file.filename} is {file_size_mb:.1f}MB — skipping specialized parser")
+                uni_result = await loop.run_in_executor(None, universal_parse, str(save_path))
+                df, ptype, count, cache_key = uni_result
+                if count > 0:
+                    parse_source = f'universal_{ptype}'
+            else:
+                async def _run_both():
+                    uni_fut = loop.run_in_executor(None, universal_parse, str(save_path))
+                    spec_fut = loop.run_in_executor(None, run_parse_file, str(save_path))
+                    uni_result, spec_result = await asyncio.gather(uni_fut, spec_fut)
+                    return uni_result, spec_result
 
-            async def _run_both():
-                uni_fut = loop.run_in_executor(None, universal_parse, str(save_path))
-                spec_fut = loop.run_in_executor(None, run_parse_file, str(save_path))
-                uni_result, spec_result = await asyncio.gather(uni_fut, spec_fut)
-                return uni_result, spec_result
-
-            uni_result, spec_result = await asyncio.wait_for(_run_both(), timeout=300)  # 5分钟服务端超时
-            df, ptype, count, cache_key = uni_result
-            df2 = spec_result
-            if count > 0:
-                parse_source = f'universal_{ptype}'
+                uni_result, spec_result = await asyncio.wait_for(_run_both(), timeout=300)
+                df, ptype, count, cache_key = uni_result
+                df2 = spec_result
+                if count > 0:
+                    parse_source = f'universal_{ptype}'
 
         elif ext == '.pdf':
 
@@ -1683,6 +1692,13 @@ async def parse_file(
             pass
 
         
+        # 过滤假产品：只有1个产品且model看起来像文件名或占位符
+        import re as _re
+        if len(products) == 1:
+            m = products[0].get('model', '')
+            if m and (_re.match(r'^\d{14}_', m) or m.endswith(('.xlsx', '.xls', '.pdf')) or m.startswith('产品_R')):
+                products = []
+                parse_source = 'filtered_empty'
 
         # 上传成功计数（仅登录用户）
         if user:
