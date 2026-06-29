@@ -97,12 +97,9 @@ export default function Home() {
     { model: 'SP-100', name_zh: '蓝牙音箱', spec_zh: '20W输出 / IPX7防水 / TWS串联 / 12h续航', price_rmb: 89.00, currency: 'CNY', category: '电子产品' },
     { model: 'CL-300', name_zh: 'LED台灯', spec_zh: '无级调光 / 色温2700-6500K / USB供电 / 折叠便携', price_rmb: 35.00, currency: 'CNY', category: '家居用品' },
   ];
-  const [demoLoaded, setDemoLoaded] = useState(false);
   const handleDemo = () => {
-    if (demoLoaded) return;
     setFileEntries([{ name: locale === 'zh' ? '示例产品.xlsx' : 'demo_products.xlsx', products: demoProducts, dedupCount: null }]);
     setCheckedFiles(new Set([0]));
-    setDemoLoaded(true);
   };
 
   const toggleFile = (idx) => {
@@ -204,7 +201,7 @@ export default function Home() {
               </div>
             )}
           </div>
-          {!demoLoaded && !uploadLocked && (
+          {!uploadLocked && (
             <button onClick={handleDemo}
               className="mt-4 px-5 py-2 rounded-lg bg-[var(--gold)] text-white text-sm font-medium hover:bg-[var(--gold)]/90 transition-colors cursor-pointer">
               {locale === 'zh' ? '🎯 试试 Demo（无需上传）' : '🎯 Try Demo (No Upload Needed)'}

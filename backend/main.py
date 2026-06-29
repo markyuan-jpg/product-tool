@@ -308,6 +308,28 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 
 OUTPUT_DIR.mkdir(exist_ok=True)
 
+# ─── 启动时清理过期文件（防止磁盘堆积）───
+TEMP_IMG_DIR = PROJECT_ROOT / "product_tool" / "temp_images"
+TEMP_IMG_DIR.mkdir(exist_ok=True)
+
+def _cleanup_old_files(directory: Path, max_age_days: int = 7):
+    """删除超过 max_age_days 天的文件"""
+    import time
+    cutoff = time.time() - max_age_days * 86400
+    try:
+        for f in directory.iterdir():
+            if f.is_file() and f.stat().st_mtime < cutoff:
+                try:
+                    f.unlink()
+                    logger.info(f"已清理过期文件: {f}")
+                except OSError:
+                    pass
+    except Exception:
+        pass
+
+_cleanup_old_files(OUTPUT_DIR, max_age_days=7)
+_cleanup_old_files(TEMP_IMG_DIR, max_age_days=14)
+
 
 # ─── 匿名会话：不再需要登录，自动获得 session ID ───
 # 所有功能对匿名用户开放，tier 固定为 'pro'
@@ -891,9 +913,10 @@ def _extract_packaging_from_spec(spec_zh: str) -> dict:
     return result
 
 
+@limiter.limit("30/minute")
 @app.post("/api/products/save")
 
-async def save_products(products: str = Form(...), user: dict = Depends(get_session_id)):
+async def save_products(request: Request, products: str = Form(...), user: dict = Depends(get_session_id)):
 
     items = json.loads(products)
 
@@ -1499,9 +1522,10 @@ async def parse_file(
 
 #  AI-enhanced parse 
 
+@limiter.limit("10/minute")
 @app.post("/api/parse/with-ai")
 
-async def parse_with_ai(file: UploadFile = File(...), ai_backend: str = Form("gemini"), user: dict = Depends(get_session_id)):
+async def parse_with_ai(request: Request, file: UploadFile = File(...), ai_backend: str = Form("gemini"), user: dict = Depends(get_session_id)):
 
     ext = Path(file.filename).suffix.lower()
 
@@ -1631,9 +1655,10 @@ async def parse_with_ai(file: UploadFile = File(...), ai_backend: str = Form("ge
             os.remove(save_path)
 
 
+@limiter.limit("10/minute")
 @app.post("/api/parse-text-products")
 
-async def parse_text_products(data: dict = Body(...), user: GuestUser = Depends(get_session_id)):
+async def parse_text_products(request: Request, data: dict = Body(...), user: GuestUser = Depends(get_session_id)):
     """智能粘贴 — 对所有匿名用户开放"""
     text = data.get('text', '')
     if not text or not text.strip():
@@ -1711,9 +1736,11 @@ async def delete_doc_template(doc_type: str, user: dict = Depends(get_session_id
 
 #  Generate quotation 
 
+@limiter.limit("30/minute")
 @app.post("/api/quotation")
 
 async def generate_quotation(
+    request: Request,
 
     products: str = Form(...),
 
@@ -1940,9 +1967,11 @@ async def batch_delete_quotations(ids: str = Form(...), user: dict = Depends(get
 
 #  Generate PI (Proforma Invoice) 
 
+@limiter.limit("30/minute")
 @app.post("/api/quotation/pdf")
 
 async def generate_quotation_pdf(
+    request: Request,
 
     products: str = Form(...),
 
@@ -1997,8 +2026,10 @@ async def generate_quotation_pdf(
     return FileResponse(str(output_path), media_type="application/pdf", filename=f"报价单_{ts}.pdf")
 
 
+@limiter.limit("30/minute")
 @app.post("/api/pi")
 async def generate_pi(
+    request: Request,
     products: str = Form(...),
     lang: str = Form("chinese"),
     with_images: str = Form("1"),
@@ -2125,9 +2156,11 @@ async def generate_pi(
 
 #  Generate Packing List 
 
+@limiter.limit("30/minute")
 @app.post("/api/packing")
 
 async def generate_packing(
+    request: Request,
 
     products: str = Form(...),
 
@@ -2209,9 +2242,11 @@ async def generate_packing(
 
 #  Generate Commercial Invoice 
 
+@limiter.limit("30/minute")
 @app.post("/api/invoice")
 
 async def generate_invoice(
+    request: Request,
 
     products: str = Form(...),
 
