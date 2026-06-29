@@ -26,17 +26,17 @@ from src.output.doc_shared import translate_items, payment_by_lang, get_seller_i
 
 #   
 
-FONT_TITLE = Font(name='Arial', size=14, bold=True, color='1F4E79')
+FONT_TITLE = Font(name='Microsoft YaHei', size=14, bold=True, color='1F4E79')
 
-FONT_SECTION = Font(name='Arial', size=10, bold=True)
+FONT_SECTION = Font(name='Microsoft YaHei', size=10, bold=True)
 
-FONT_NORMAL = Font(name='Arial', size=9)
+FONT_NORMAL = Font(name='Microsoft YaHei', size=9)
 
-FONT_BOLD = Font(name='Arial', size=9, bold=True)
+FONT_BOLD = Font(name='Microsoft YaHei', size=9, bold=True)
 
-FONT_SMALL = Font(name='Arial', size=8)
+FONT_SMALL = Font(name='Microsoft YaHei', size=8)
 
-FONT_TABLE_HEADER = Font(name='Arial', size=9, bold=True, color='FFFFFF')
+FONT_TABLE_HEADER = Font(name='Microsoft YaHei', size=9, bold=True, color='FFFFFF')
 
 FILL_BLUE = PatternFill(start_color='1F4E79', end_color='1F4E79', fill_type='solid')
 
@@ -310,7 +310,7 @@ def generate_packing_list(
 
     for ci, v in enumerate(total_vals, 1):
 
-        ws.cell(row, ci).value = v; ws.cell(row, ci).font = Font(name='Arial',size=9,bold=True); ws.cell(row, ci).border = BORDER
+        ws.cell(row, ci).value = v; ws.cell(row, ci).font = Font(name='Microsoft YaHei',size=9,bold=True); ws.cell(row, ci).border = BORDER
 
         ws.cell(row, ci).fill = FILL_TOTAL; ws.cell(row, ci).alignment = ALIGN_RIGHT if ci>2 else ALIGN_CENTER
 
@@ -325,13 +325,13 @@ def generate_packing_list(
 
     ws.cell(row, 1).value = _td('7. Remarks:', lang); ws.cell(row, 1).font = FONT_SECTION; row += 1
 
-    ws.cell(row, 1).value = '[Palletized]'; ws.cell(row, 1).font = Font(name='Arial',size=8,color='999999',italic=True); ws.merge_cells(f'A{row}:H{row}'); row += 2
+    ws.cell(row, 1).value = '[Palletized]'; ws.cell(row, 1).font = Font(name='Microsoft YaHei',size=8,color='999999',italic=True); ws.merge_cells(f'A{row}:H{row}'); row += 2
 
     ws.cell(row, 1).value = _td('8. Signature:', lang); ws.cell(row, 1).font = FONT_SECTION; row += 1
 
     ws.cell(row, 1).value = seller_name; ws.cell(row, 1).font = FONT_BOLD; row += 1
 
-    ws.cell(row, 1).value = _td('(signed & stamped)', lang); ws.cell(row, 1).font = Font(name='Arial',size=8,color='888888')
+    ws.cell(row, 1).value = _td('(signed & stamped)', lang); ws.cell(row, 1).font = Font(name='Microsoft YaHei',size=8,color='888888')
 
     wb.save(output_path)
 
@@ -577,7 +577,7 @@ def generate_commercial_invoice(
 
     ws.cell(row,1).value=_td(f'7. Total Amount ({trade_terms}):', lang); ws.cell(row,1).font=FONT_SECTION; ws.merge_cells(f'A{row}:F{row}')
 
-    ws.cell(row,7).value=total_amount; ws.cell(row,7).font=Font(name='Arial',size=11,bold=True); ws.cell(row,7).border=BORDER; ws.cell(row,7).fill=FILL_TOTAL; row+=2
+    ws.cell(row,7).value=total_amount; ws.cell(row,7).font=Font(name='Microsoft YaHei',size=11,bold=True); ws.cell(row,7).border=BORDER; ws.cell(row,7).fill=FILL_TOTAL; row+=2
 
     try:
 
@@ -617,7 +617,7 @@ def generate_commercial_invoice(
 
     ws.cell(row,1).value=seller_name; ws.cell(row,1).font=FONT_BOLD; row+=1
 
-    ws.cell(row,1).value=_td('(signed & stamped)', lang); ws.cell(row,1).font=Font(name='Arial',size=8,color='888888')
+    ws.cell(row,1).value=_td('(signed & stamped)', lang); ws.cell(row,1).font=Font(name='Microsoft YaHei',size=8,color='888888')
 
     wb.save(output_path)
 

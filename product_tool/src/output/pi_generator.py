@@ -15,14 +15,14 @@ from .doc_shared import translate_items, get_seller_info, payment_by_lang
 from ..parsers.spec_cleaner import clean_spec
 
 # ─── 样式 ───
-FONT_TITLE = Font(name='Arial', size=16, bold=True)
-FONT_HEADER = Font(name='Arial', size=10, bold=True)
-FONT_NORMAL = Font(name='Arial', size=9)
-FONT_SMALL = Font(name='Arial', size=8)
-FONT_BOLD = Font(name='Arial', size=9, bold=True)
-FONT_TOTAL = Font(name='Arial', size=10, bold=True)
+FONT_TITLE = Font(name='Microsoft YaHei', size=16, bold=True)
+FONT_HEADER = Font(name='Microsoft YaHei', size=10, bold=True)
+FONT_NORMAL = Font(name='Microsoft YaHei', size=9)
+FONT_SMALL = Font(name='Microsoft YaHei', size=8)
+FONT_BOLD = Font(name='Microsoft YaHei', size=9, bold=True)
+FONT_TOTAL = Font(name='Microsoft YaHei', size=10, bold=True)
 FILL_TITLE = PatternFill(start_color='1F4E79', end_color='1F4E79', fill_type='solid')
-FONT_TITLE_WHITE = Font(name='Arial', size=16, bold=True, color='FFFFFF')
+FONT_TITLE_WHITE = Font(name='Microsoft YaHei', size=16, bold=True, color='FFFFFF')
 FILL_HEADER = PatternFill(start_color='D6E4F0', end_color='D6E4F0', fill_type='solid')
 FILL_ODD = PatternFill(start_color='FFFFFF', end_color='FFFFFF', fill_type='solid')
 FILL_EVEN = PatternFill(start_color='F2F7FB', end_color='F2F7FB', fill_type='solid')
@@ -174,10 +174,10 @@ def generate_pi_xlsx(
                 ws.add_image(logo, f'A{row}')
         except Exception:
             ws.cell(row, 1).value = '[LOGO]'
-            ws.cell(row, 1).font = Font(name='Arial', size=8, color='CCCCCC')
+            ws.cell(row, 1).font = Font(name='Microsoft YaHei', size=8, color='CCCCCC')
     else:
         ws.cell(row, 1).value = '[LOGO]'
-        ws.cell(row, 1).font = Font(name='Arial', size=8, color='CCCCCC')
+        ws.cell(row, 1).font = Font(name='Microsoft YaHei', size=8, color='CCCCCC')
     ws.column_dimensions['A'].width = 12
 
     header_text = seller.get('company', '') or _td('[Company Name]', lang)
@@ -186,7 +186,7 @@ def generate_pi_xlsx(
     ws.merge_cells(f'B{row}:F{row}')
     cell = ws[f'B{row}']
     cell.value = header_text
-    cell.font = Font(name='Arial', size=9, bold=True)
+    cell.font = Font(name='Microsoft YaHei', size=9, bold=True)
     cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
     ws.row_dimensions[row].height = 30
     row += 2
@@ -195,7 +195,7 @@ def generate_pi_xlsx(
     ws.merge_cells(f'A{row}:F{row}')
     cell = ws[f'A{row}']
     cell.value = _td('PROFORMA INVOICE', lang)
-    cell.font = Font(name='Arial', size=18, bold=True, color='1F4E79')
+    cell.font = Font(name='Microsoft YaHei', size=18, bold=True, color='1F4E79')
     cell.alignment = ALIGN_CENTER
     ws.row_dimensions[row].height = 32
     row += 2
@@ -234,7 +234,7 @@ def generate_pi_xlsx(
             continue
         cell = ws.cell(row, ci)
         cell.value = h
-        cell.font = Font(name='Arial', size=9, bold=True, color='FFFFFF')
+        cell.font = Font(name='Microsoft YaHei', size=9, bold=True, color='FFFFFF')
         cell.fill = FILL_TITLE
         cell.alignment = ALIGN_CENTER
         cell.border = THIN_BORDER
@@ -246,7 +246,7 @@ def generate_pi_xlsx(
     for ci, h in enumerate(sub_headers, 1):
         cell = ws.cell(row, ci)
         cell.value = h
-        cell.font = Font(name='Arial', size=8, bold=True, color='FFFFFF')
+        cell.font = Font(name='Microsoft YaHei', size=8, bold=True, color='FFFFFF')
         cell.fill = FILL_TITLE
         cell.alignment = ALIGN_CENTER
         cell.border = THIN_BORDER
@@ -337,7 +337,7 @@ def generate_pi_xlsx(
     # ─── Amount in Words ───
     ws.merge_cells(f'A{row}:F{row}')
     ws.cell(row, 1).value = f"{_td('TOTAL PAYMENT', lang)} {_td('SAY', lang)} {_num_to_words(total_amount, currency, lang)}"
-    ws.cell(row, 1).font = Font(name='Arial', size=8, italic=True)
+    ws.cell(row, 1).font = Font(name='Microsoft YaHei', size=8, italic=True)
     ws.cell(row, 1).alignment = ALIGN_LEFT
     row += 2
 
@@ -367,7 +367,7 @@ def generate_pi_xlsx(
     # ─── Bank Info（每行一个字段，空值用占位符） ───
     ws.merge_cells(f'A{row}:F{row}')
     ws.cell(row, 1).value = f"8.  {_td('Bank Information:', lang)}"
-    ws.cell(row, 1).font = Font(name='Arial', size=9, bold=True)
+    ws.cell(row, 1).font = Font(name='Microsoft YaHei', size=9, bold=True)
     ws.cell(row, 1).alignment = ALIGN_LEFT
     row += 1
     bank_labels = [
@@ -399,15 +399,15 @@ def generate_pi_xlsx(
     ws.cell(row, 4).font = FONT_BOLD
     row += 1
     ws.cell(row, 1).value = _td('(signed & stamped)', lang)
-    ws.cell(row, 1).font = Font(name='Arial', size=8, color='888888')
+    ws.cell(row, 1).font = Font(name='Microsoft YaHei', size=8, color='888888')
     ws.cell(row, 4).value = _td('(signed & stamped)', lang)
-    ws.cell(row, 4).font = Font(name='Arial', size=8, color='888888')
+    ws.cell(row, 4).font = Font(name='Microsoft YaHei', size=8, color='888888')
     row += 2
 
     # ─── Footer ───
     ws.merge_cells(f'A{row}:F{row}')
     ws.cell(row, 1).value = seller.get('company', '')
-    ws.cell(row, 1).font = Font(name='Arial', size=9, bold=True, color='1F4E79')
+    ws.cell(row, 1).font = Font(name='Microsoft YaHei', size=9, bold=True, color='1F4E79')
     ws.cell(row, 1).alignment = ALIGN_CENTER
 
     # Print Layout

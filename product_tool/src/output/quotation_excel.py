@@ -57,27 +57,27 @@ from .doc_shared import payment_by_lang, filter_by_lang, has_chinese, is_already
 
 
 
-HEADER_FONT = Font(name='Arial', size=14, bold=True, color='000000')
+HEADER_FONT = Font(name='Microsoft YaHei', size=14, bold=True, color='000000')
 
 HEADER_FILL = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
 
-HEADER_FONT_WHITE = Font(name='Arial', size=12, bold=True, color='FFFFFF')
+HEADER_FONT_WHITE = Font(name='Microsoft YaHei', size=12, bold=True, color='FFFFFF')
 
 
 
-SUBHEADER_FONT = Font(name='Arial', size=11, bold=True, color='000000')
+SUBHEADER_FONT = Font(name='Microsoft YaHei', size=11, bold=True, color='000000')
 
 SUBHEADER_FILL = PatternFill(start_color='D9E1F2', end_color='D9E1F2', fill_type='solid')
 
 
 
-TABLE_HEADER_FONT = Font(name='Arial', size=10, bold=True, color='FFFFFF')
+TABLE_HEADER_FONT = Font(name='Microsoft YaHei', size=10, bold=True, color='FFFFFF')
 
 TABLE_HEADER_FILL = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
 
 
 
-DATA_FONT = Font(name='Arial', size=10, color='000000')
+DATA_FONT = Font(name='Microsoft YaHei', size=10, color='000000')
 
 DATA_ALIGN_LEFT = Alignment(horizontal='left', vertical='center', wrap_text=True)
 
@@ -99,9 +99,9 @@ BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
 
 
 
-PRICE_FONT = Font(name='Arial', size=10, bold=False, color='000000')
+PRICE_FONT = Font(name='Microsoft YaHei', size=10, bold=False, color='000000')
 
-TOTAL_FONT = Font(name='Arial', size=11, bold=True, color='000000')
+TOTAL_FONT = Font(name='Microsoft YaHei', size=11, bold=True, color='000000')
 
 
 
@@ -520,7 +520,7 @@ class QuotationExcel:
 
             cell.value = company_name
 
-            cell.font = Font(name='Arial', size=11, bold=True, color='1a5fb4')
+            cell.font = Font(name='Microsoft YaHei', size=11, bold=True, color='1a5fb4')
 
             cell.alignment = Alignment(horizontal='left', vertical='center')
 
@@ -564,7 +564,7 @@ class QuotationExcel:
 
             cell.value = ' | '.join(parts)
 
-            cell.font = Font(name='Arial', size=9, color='555555')
+            cell.font = Font(name='Microsoft YaHei', size=9, color='555555')
 
             cell.alignment = Alignment(horizontal='left', vertical='center')
 
@@ -883,7 +883,7 @@ class QuotationExcel:
 
                 cell.value = f"???{remark}"
 
-                cell.font = Font(name='Arial', size=8, color='888888', italic=True)
+                cell.font = Font(name='Microsoft YaHei', size=8, color='888888', italic=True)
 
                 cell.alignment = Alignment(horizontal='left', vertical='top', wrap_text=True)
 

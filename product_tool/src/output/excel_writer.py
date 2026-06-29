@@ -15,12 +15,12 @@ from PIL import Image
 # ==================== 样式定义 ====================
 
 # 表头样式
-HEADER_FONT = Font(name='Arial', size=11, bold=True, color='FFFFFF')
+HEADER_FONT = Font(name='Microsoft YaHei', size=11, bold=True, color='FFFFFF')
 HEADER_FILL = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
 HEADER_ALIGN = Alignment(horizontal='center', vertical='center')
 
 # 数据样式
-DATA_FONT = Font(name='Arial', size=10)
+DATA_FONT = Font(name='Microsoft YaHei', size=10)
 DATA_ALIGN = Alignment(horizontal='left', vertical='top', wrap_text=True)
 
 # 交替行样式
