@@ -863,6 +863,7 @@ def extract_products_from_pdf_v2(pdf_path: str) -> Optional[pd.DataFrame]:
                                 '_image_path': '',
                                 '_source_file': pdf_path,
                             }
+                            price_raw_vals = []
                             specs = []
                             for row in target_table[model_row_idx + 1:]:
                                 if not row or len(row) <= col_idx:
@@ -872,15 +873,23 @@ def extract_products_from_pdf_v2(pdf_path: str) -> Optional[pd.DataFrame]:
                                 if not param_val:
                                     continue
                                 
-                                # Check if this is a price row
+                                # Check if this is a price row — also scan value for price signals
                                 price_kw = ['price', 'usd', '出厂价', '价格', '报价', 'exw']
                                 param_lower = param_name.lower()
-                                if any(kw in param_lower for kw in price_kw) or '$' in param_name:
+                                val_lower = param_val.lower()
+                                is_price = any(kw in param_lower for kw in price_kw) or '$' in param_name
+                                # 值含usd/$也算价格行（如"950usd"）
+                                if not is_price and val_lower:
+                                    is_price = 'usd' in val_lower or '$' in val_lower
+                                if is_price:
                                     nums = re.findall(r'([\d,]+(?:\.\d+)?)', param_val.replace(',', ''))
                                     if nums:
                                         try:
-                                            p['price_rmb'] = float(nums[0])
-                                            if 'usd' in param_lower or '$' in param_name or 'usd' in param_val.lower():
+                                            pv = float(nums[0])
+                                            price_raw_vals.append(pv)
+                                            if p['price_rmb'] == 0:
+                                                p['price_rmb'] = pv
+                                            if 'usd' in param_lower or '$' in param_name or 'usd' in val_lower:
                                                 p['currency'] = 'USD'
                                             continue
                                         except ValueError:
@@ -916,7 +925,7 @@ def extract_products_from_pdf_v2(pdf_path: str) -> Optional[pd.DataFrame]:
                     
                     # 检测价格（精确匹配：英文词用边界，中文词要求出现在最后30字）
                     is_price_line = False
-                    for kw in ['price', 'exw']:
+                    for kw in ['price', 'exw', 'total']:
                         if re.search(r'\b' + kw + r'\b', key_lower):
                             is_price_line = True
                             break
@@ -949,7 +958,9 @@ def extract_products_from_pdf_v2(pdf_path: str) -> Optional[pd.DataFrame]:
                                 if p is None:
                                     p = float(nums[-1])
                                 if p and p > 0:
-                                    found_price = max(found_price or 0, p)
+                                    if found_price is None:
+                                        found_price = p  # 第一个价格(单价)
+                                    # else: keep first, don't overwrite with total
                             except Exception:
                                 pass
                         continue
