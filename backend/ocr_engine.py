@@ -140,7 +140,7 @@ def is_scanned_pdf(pdf_path: str, text_threshold: int = 50) -> bool:
         for i in range(pages_checked):
             total_chars += len(doc[i].get_text().strip())
         return total_chars < text_threshold
-    finally:
-        doc.close()
     except Exception:
         return False
+    finally:
+        doc.close()
