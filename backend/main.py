@@ -1985,14 +1985,12 @@ async def generate_quotation_pdf(
         raise HTTPException(500, "PDF 报价单生成失败")
 
     pdf_qid = None
-    user = await get_current_user_optional(authorization, db)
-    if user:
-        try:
-            from product_repo import save_quotation
-            pdf_qid = save_quotation(user.id, json.dumps(items),
-                f"报价单PDF_{ts}.pdf", str(output_path))
-        except Exception as e:
-            logger.warning("PDF报价auto-save 失败: %s", e)
+    try:
+        from product_repo import save_quotation
+        pdf_qid = save_quotation(user.id, json.dumps(items),
+            f"报价单PDF_{ts}.pdf", str(output_path))
+    except Exception as e:
+        logger.warning("PDF报价auto-save 失败: %s", e)
 
     if pdf_qid:
         return {"status": "ok", "id": pdf_qid, "name": f"报价单PDF_{ts}.pdf"}
@@ -2011,6 +2009,8 @@ async def generate_pi(
     payment_terms: str = Form(""),
     shipping_marks: str = Form(""),
     bank_info: str = Form(""),
+    port_destination: str = Form(""),
+    brand_name: str = Form(""),
     db: AsyncSession = Depends(get_session),
 
     user: User = Depends(get_session_id)):
@@ -2042,12 +2042,16 @@ async def generate_pi(
     bank_beneficiary = ""
     bank_name = ""
     bank_account = ""
+    bank_address = ""
+    bank_swift = ""
     if bank_info:
         try:
             bi = json.loads(bank_info)
             bank_beneficiary = bi.get('beneficiary', '')
             bank_name = bi.get('bank_name', '')
             bank_account = bi.get('account_no', '')
+            bank_address = bi.get('bank_address', '')
+            bank_swift = bi.get('swift_code', '')
         except Exception:
             pass
 
@@ -2190,11 +2194,9 @@ async def generate_packing(
     pk_qid = None
     try:
 
-        if _pro_user:
-
-            from product_repo import save_quotation
-            pk_qid = save_quotation(_pro_user.id, json.dumps(items),
-                f"装箱单_{ts}.xlsx", str(result_path))
+        from product_repo import save_quotation
+        pk_qid = save_quotation(user.id, json.dumps(items),
+            f"装箱单_{ts}.xlsx", str(result_path))
 
     except Exception as e:
 
@@ -2294,11 +2296,9 @@ async def generate_invoice(
     inv_qid = None
     try:
 
-        if _pro_user:
-
-            from product_repo import save_quotation
-            inv_qid = save_quotation(_pro_user.id, json.dumps(items),
-                f"商业发票_{ts}.xlsx", str(result_path))
+        from product_repo import save_quotation
+        inv_qid = save_quotation(user.id, json.dumps(items),
+            f"商业发票_{ts}.xlsx", str(result_path))
 
     except Exception as e:
 

@@ -140,7 +140,13 @@ def _fallback_reportlab(data: List[Dict], output_path: str,
                     _cn_font = 'CF'
                 _font_ok = True
             except Exception as ex:
-                logging.warning(f"Font registration failed for {_p}: {ex}")
+                                    logging.warning(f"Font registration failed for {_p}: {ex}")
+
+    # Fallback: if only one variant was found, use it for both
+    if _cn_font == 'Helvetica' and _cn_font_bold != 'Helvetica-Bold':
+        _cn_font = _cn_font_bold
+    elif _cn_font_bold == 'Helvetica-Bold' and _cn_font != 'Helvetica':
+        _cn_font_bold = _cn_font
 
     doc = SimpleDocTemplate(output_path, pagesize=A4,
                            leftMargin=10*mm, rightMargin=10*mm,

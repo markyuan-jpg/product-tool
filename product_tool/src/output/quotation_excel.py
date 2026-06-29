@@ -596,9 +596,9 @@ class QuotationExcel:
 
             ws.cell(row, i*2+2, info_values[i])
 
-            ws.cell(row, i*2+1).font = Font(bold=True, size=9)
+            ws.cell(row, i*2+1).font = Font(name='Microsoft YaHei', bold=True, size=9)
 
-            ws.cell(row, i*2+2).font = Font(size=9)
+            ws.cell(row, i*2+2).font = Font(name='Microsoft YaHei', size=9)
 
         row += 1
 
@@ -1001,7 +1001,7 @@ class QuotationExcel:
 
             cell.value = term
 
-            cell.font = Font(size=9, color='333333')
+            cell.font = Font(name='Microsoft YaHei', size=9, color='333333')
 
             cell.alignment = Alignment(horizontal='left', vertical='center')
 
@@ -1109,7 +1109,7 @@ class QuotationExcel:
 
             cell.value = header
 
-            cell.font = Font(bold=True)
+            cell.font = Font(name='Microsoft YaHei', bold=True)
 
             cell.fill = SUBHEADER_FILL
 

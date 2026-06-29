@@ -86,8 +86,8 @@ def create_checkout_session(
 def verify_webhook(payload: bytes, signature: str) -> bool:
     """Verify Creem webhook HMAC-SHA256 signature."""
     if not CREEM_WEBHOOK_SECRET:
-        logger.warning("Creem webhook secret not configured, skipping verification")
-        return True
+        logger.warning("Creem webhook secret not configured, rejecting request")
+        return False
     expected = hmac.new(
         CREEM_WEBHOOK_SECRET.encode(),
         payload,
