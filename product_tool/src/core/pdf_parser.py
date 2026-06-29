@@ -1022,6 +1022,7 @@ def extract_products_from_pdf_v2(pdf_path: str) -> Optional[pd.DataFrame]:
                 specs = {}
                 packaging = {}
                 price_rmb = 0
+                price_raw = []  # 保留所有价格供 spec 展示
                 price_currency = 'CNY'
                 # 检查表头行是否含USD/FOB标记
                 header_val = str(header_row[col_idx] or '').lower() if col_idx < len(header_row) else ''
@@ -1095,10 +1096,9 @@ def extract_products_from_pdf_v2(pdf_path: str) -> Optional[pd.DataFrame]:
                             try:
                                 p = float(price_num.replace(',', ''))
                                 if p > 0:
+                                    price_raw.append(p)  # 保留所有价格
                                     if price_rmb == 0:
                                         price_rmb = p  # 取第一个价格(通常是单价)
-                                    else:
-                                        price_rmb = max(price_rmb, p)  # fallback: 保留已有价格
                                     # 标记币种
                                     if usd_match:
                                         m = usd_match.group(0).lower()
@@ -1127,6 +1127,7 @@ def extract_products_from_pdf_v2(pdf_path: str) -> Optional[pd.DataFrame]:
                     'model': model_clean,
                     'name_zh': '',
                     'price_rmb': price_rmb,
+                    'price_raw': ' | '.join([f'{price_currency} {p:,.2f}' for p in price_raw]) if len(price_raw) > 1 else '',
                     'currency': price_currency,
                     'spec_zh': format_spec_spec('; '.join(f"{k}: {v}" for k, v in all_specs.items())),
                     '_image_path': '',
