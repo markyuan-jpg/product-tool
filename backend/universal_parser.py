@@ -753,6 +753,7 @@ def parse_with_colmap(ws, header_row: int, col_map: dict) -> pd.DataFrame:
             'currency': currency,
             'remark': '',
             'category': '',
+            'price_raw': str(price_raw).strip() if price_raw and str(price_raw).strip() != str(price).strip() else '',
             '_row': r,
             '_sheet': ws.title,
         })

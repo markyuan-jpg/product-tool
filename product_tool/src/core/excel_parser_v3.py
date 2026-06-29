@@ -715,6 +715,7 @@ def parse_vertical(ws, images_by_row: Dict[int, str] = None) -> pd.DataFrame:
             'name_zh': str(name).strip() if name else '',
             'spec_zh': '\n'.join(spec_parts) if spec_parts else '',
             'price_rmb': price_val,
+            'price_raw': str(price).strip() if price and str(price).strip() != str(price_val).strip() else '',
             'remark': remark_val,
             'image_path': images_by_row.get(r, '') if images_by_row else '',
             '_row': r,
