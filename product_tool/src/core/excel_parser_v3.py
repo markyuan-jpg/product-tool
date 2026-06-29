@@ -148,10 +148,13 @@ def get_column_stats(values: List) -> Dict[str, float]:
     if num_values:
         max_price = max(num_values)
         min_price = min(num_values)
+        # 含小数点加分 — 真实价格常有小数，MOQ 通常是整数
+        has_decimals = any('.' in str(v) for v in values if is_numeric(v))
+        decimal_bonus = 0.15 if has_decimals else 0.0
         if 0.01 <= min_price <= max_price <= 100000 and numeric_ratio > 0.5:
-            scores['price'] = numeric_ratio * 0.9
+            scores['price'] = numeric_ratio * (0.9 + decimal_bonus)
         elif numeric_ratio > 0.8 and max_price > 100000:
-            scores['price'] = numeric_ratio * 0.8
+            scores['price'] = numeric_ratio * (0.8 + decimal_bonus)
     
     model_count = count_model_code(values)
     model_ratio = model_count / n if n > 0 else 0

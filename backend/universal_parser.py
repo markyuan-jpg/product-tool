@@ -365,11 +365,10 @@ def map_columns(ws, header_row: int) -> dict:
             col_map['model_col'] = best_model_col
 
     if 'price_col' not in col_map:
-        # 价格列兜底：找最后一列有数字数据的列
+        # 价格列兜底：从左往右找第一个有数字数据的列（真实价格通常在 MOQ 左边）
         available = sorted(set(range(max_col)) - {col_map.get(k) for k in col_map})
         if available:
-            # 从后往前找含数字的列
-            for c in reversed(available):
+            for c in available:  # 从左到右 — 价格列通常在最左的数字列
                 for r in range(header_row + 1, min(header_row + 5, ws.max_row + 1)):
                     v = ws.cell(r, c + 1).value
                     if v is not None and isinstance(v, (int, float)):
@@ -377,8 +376,6 @@ def map_columns(ws, header_row: int) -> dict:
                         break
                 if 'price_col' in col_map:
                     break
-            if 'price_col' not in col_map:
-                col_map['price_col'] = available[-1]  # 兜底取最后一列
 
     # 币种检测：从表头行找 USD/FOB 标记
     price_col = col_map.get('price_col')
@@ -790,6 +787,7 @@ def _classify_columns_by_content(ws, header_row: int) -> dict:
             if (re.match(r'^[A-Za-z0-9][A-Za-z0-9\-_\.\/\+]+$', val)
                     and not re.search(r'[\u4e00-\u9fff]', val)
                     and not str(val).isdigit()
+                    and not re.match(r'^[\d,]+(?:\.\d+)?$', val)  # 排除纯数字/小数 → 不会误当型号
                     and not _units_re.search(val.lower())
                     and len(val) < 30
                     and len(val) >= 2):
@@ -814,6 +812,15 @@ def _classify_columns_by_content(ws, header_row: int) -> dict:
         if scores['skip'] > scores['total'] * 0.3 and scores['total'] > 2:
             continue
         best = max(['model', 'price', 'spec', 'qty'], key=lambda k: scores[k] + (scores['total'] * 0.1))
+        # 价格/数量平局时：纯整数列优先判为 qty（真实价格通常含小数）
+        if scores['price'] == scores['qty'] and scores['price'] > 0:
+            all_int = all(
+                str(ws.cell(r, c).value or '').strip().isdigit()
+                for r in range(header_row + 1, min(ws.max_row + 1, header_row + 10))
+                if ws.cell(r, c).value is not None
+            )
+            if all_int:
+                best = 'qty'
         if scores[best] >= 2:
             col_map[best + '_col'] = c - 1
     return col_map

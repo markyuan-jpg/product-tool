@@ -9,6 +9,7 @@ import sys
 import os
 import json
 from pathlib import Path
+import pandas as pd
 
 # Add project root and product_tool to path
 PROJECT_ROOT = Path(__file__).parent.parent.parent
@@ -75,12 +76,13 @@ def main():
         print(f"📋 评测: {ann['file']}")
         try:
             products = parse_file_direct(str(filepath))
-            products = [{k: v for k, v in p.items() if not pd.isna(v) if 'pd' in dir()} for p in products]
-            # Clean: convert numpy types to native
+            # Clean: remove NaN values and convert numpy types to native
             clean_products = []
             for p in products:
                 cp = {}
                 for k, v in p.items():
+                    if isinstance(v, float) and (v != v):  # NaN check
+                        continue
                     if hasattr(v, 'item'):  # numpy scalar
                         v = v.item()
                     if isinstance(v, float) and (v != v):  # NaN
@@ -105,7 +107,7 @@ def main():
     from run_benchmark import print_report
     avg = print_report(results)
     
-    THRESHOLD = 0.10  # Baseline for current parser accuracy. Raise as issues are fixed.
+    THRESHOLD = 0.75  # 修复 MOQ/price 误识别后基线 86%
     if avg['overall'] < THRESHOLD:
         print(f"\n❌ 评测失败: 综合分 {avg['overall']:.0%} < 阈值 {THRESHOLD:.0%}")
         sys.exit(1)
@@ -116,5 +118,4 @@ def main():
 
 
 if __name__ == '__main__':
-    import pandas as pd
     main()

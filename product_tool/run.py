@@ -186,9 +186,9 @@ def detect_parser_type(file_path: str, wb=None):
                     val = ws.cell(r, c).value
                     if val:
                         val_str = str(val).lower()
-                        if 'price' in val_str:
+                        if 'price' in val_str or '价格' in val or '单价' in val or 'Price' in val:
                             has_price_kw = True
-                        if 'model' in val_str:
+                        if 'model' in val_str or '型号' in val or 'Model' in val:
                             has_model_kw = True
             if has_price_kw and has_model_kw:
                 has_price_table = True
