@@ -132,6 +132,9 @@ _MAGIC_BYTES = {
     b'PK\x03\x04': '.xlsx',   # ZIP-based (xlsx, docx both use ZIP)
     b'%PDF': '.pdf',
     b'\xd0\xcf\x11\xe0': '.xls',  # OLE2 (old Excel)
+    b'\xff\xd8\xff': '.jpg',      # JPEG
+    b'\x89PNG': '.png',           # PNG
+    b'RIFF': '.webp',             # WebP (followed by WEBP at offset 8)
 }
 _ZIP_MIMES = {'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
               'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx'}
@@ -139,7 +142,7 @@ _ZIP_MIMES = {'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
 def _validate_file_type(filename: str, content: bytes) -> bool:
     """Magic byte + extension double check."""
     ext = os.path.splitext(filename)[1].lower()
-    allowed = {'.xlsx', '.xls', '.pdf', '.docx'}
+    allowed = {'.xlsx', '.xls', '.pdf', '.docx', '.jpg', '.jpeg', '.png', '.webp'}
     if ext not in allowed:
         return False
     # ZIP-based check (xlsx/docx share PK magic)
@@ -1374,6 +1377,87 @@ async def load_bank_info(user: User = Depends(get_session_id)):
         return {}
 
 
+def _parse_ocr_text_to_products(raw_text: str) -> list:
+    """从 OCR 文字中提取产品列表（简单规则匹配）"""
+    import re
+    products = []
+    lines = raw_text.strip().split('\n')
+    
+    current = {}
+    for line in lines:
+        line = line.strip()
+        if not line:
+            if current:
+                products.append(current)
+                current = {}
+            continue
+        
+        # Try to match common patterns in OCR output
+        # Model/SKU pattern
+        m = re.search(r'(?:型号|款号|MODEL|SKU|Item\s*No|货号)[：:\s]*([A-Za-z0-9\-_.]+)', line, re.IGNORECASE)
+        if m:
+            current['model'] = m.group(1).strip()
+            continue
+        
+        # Price pattern
+        m = re.search(r'(?:价格|单价|Price|USD|CNY|RMB|FOB|EXW)[：:\s]*\$?\s*([\d,.]+)', line, re.IGNORECASE)
+        if m:
+            try:
+                current['price_rmb'] = float(m.group(1).replace(',', ''))
+            except ValueError:
+                pass
+            continue
+        
+        # Product name
+        m = re.search(r'(?:产品|商品|名称|品名|Product|Name)[：:\s]*(.+)', line, re.IGNORECASE)
+        if m:
+            current['name_zh'] = m.group(1).strip()
+            continue
+        
+        # Spec
+        m = re.search(r'(?:规格|参数|描述|Spec|Description)[：:\s]*(.+)', line, re.IGNORECASE)
+        if m:
+            current['spec_zh'] = m.group(1).strip()
+            continue
+        
+        # Quantity/MOQ
+        m = re.search(r'(?:数量|MOQ|起订量|Qty|Quantity)[：:\s]*([\d,.]+)', line, re.IGNORECASE)
+        if m:
+            try:
+                current['qty'] = int(float(m.group(1).replace(',', '')))
+            except ValueError:
+                pass
+            continue
+    
+    if current:
+        products.append(current)
+    
+    # Dedup and add index
+    result = []
+    seen_models = set()
+    idx = 1
+    for p in products:
+        model = p.get('model', f'OCR-{idx}')
+        if model in seen_models:
+            model = f"{model}_{idx}"
+        seen_models.add(model)
+        p['model'] = model
+        p.setdefault('name_zh', '')
+        p.setdefault('spec_zh', '')
+        p.setdefault('price_rmb', 0)
+        p.setdefault('currency', 'CNY')
+        result.append(p)
+        idx += 1
+    
+    return result
+
+
+def is_likely_scanned(filepath: str) -> bool:
+    """检测 PDF 是否为扫描件（无 OCR 引擎时的简单回退）"""
+    from ocr_engine import is_scanned_pdf
+    return is_scanned_pdf(filepath)
+
+
 #  Parse file (2-step pipeline) 
 
 @app.post("/api/parse")
@@ -1387,9 +1471,9 @@ async def parse_file(
 
     ext = Path(file.filename).suffix.lower()
 
-    if ext not in ('.xlsx', '.xls', '.pdf', '.docx'):
+    if ext not in ('.xlsx', '.xls', '.pdf', '.docx', '.jpg', '.jpeg', '.png', '.webp'):
 
-        raise HTTPException(400, f"不支持的文件格式:{ext},仅支持 Excel/PDF/Word")
+        raise HTTPException(400, f"不支持的文件格式:{ext},仅支持 Excel/PDF/Word/图片(JPG/PNG)")
 
 
     # Free user upload limit check (only for logged-in users)
@@ -1416,6 +1500,36 @@ async def parse_file(
         parse_source = ''
 
         cache_key = ''
+
+
+        # ─── OCR 路径：图片 / 扫描件 PDF ───
+        IMG_EXTS = {'.jpg', '.jpeg', '.png', '.webp'}
+        if ext in IMG_EXTS or (ext == '.pdf' and is_likely_scanned(str(save_path))):
+            import asyncio as _asyncio
+            _loop = _asyncio.get_event_loop()
+            from ocr_engine import ocr_available, extract_text_from_image, extract_text_from_pdf_images
+            if not ocr_available():
+                raise HTTPException(400, "OCR引擎未安装。服务器管理员请安装: pip install easyocr")
+            
+            if ext in IMG_EXTS:
+                raw_text = await _loop.run_in_executor(None, extract_text_from_image, str(save_path))
+            else:
+                raw_text = await _loop.run_in_executor(None, extract_text_from_pdf_images, str(save_path))
+            
+            if not raw_text or not raw_text.strip():
+                raise HTTPException(400, "未能从图片/扫描件中识别出文字，请确保图片清晰且包含产品信息")
+            
+            # OCR 文字 → 结构化产品（简单 KV 解析）
+            products_list = _parse_ocr_text_to_products(raw_text)
+            if not products_list:
+                raise HTTPException(400, "未能从识别文字中提取产品信息，请确认内容包含型号/价格等关键字段")
+            
+            import pandas as pd
+            df = pd.DataFrame(products_list)
+            parse_source = 'ocr'
+            # 不需要图片匹配（原文件是图片本身）
+            result_products = products_list
+            return {"products": result_products, "count": len(result_products), "source": parse_source}
 
 
         #  Step 1 & 2: Universal + Specialized parsers

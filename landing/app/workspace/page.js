@@ -87,7 +87,7 @@ function UploadSection({ onSaveSuccess, user }) {
   const lastFileRef = useRef(null);  // 用于重试解析
 
   const handleFile = async (file) => {
-    const valid = ['.xlsx', '.xls', '.pdf', '.docx'].some(e => file.name.toLowerCase().endsWith(e));
+    const valid = ['.xlsx', '.xls', '.pdf', '.docx', '.jpg', '.jpeg', '.png', '.webp'].some(e => file.name.toLowerCase().endsWith(e));
     if (!valid) { toast.addToast(t('workspace.upload.onlySupport', locale), { type: 'error' }); return; }
     lastFileRef.current = file;
     setParsing(true); setParseError(null);
@@ -144,7 +144,7 @@ function UploadSection({ onSaveSuccess, user }) {
             onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
             onDragEnter={() => setDragOver(true)} onDragLeave={() => setDragOver(false)}
             onDrop={handleDrop} onClick={handleClick}>
-            <input ref={inputRef} type="file" accept=".xlsx,.xls,.pdf,.docx" multiple className="hidden" onChange={handleFileSelect} />
+            <input ref={inputRef} type="file" accept=".xlsx,.xls,.pdf,.docx,.jpg,.jpeg,.png,.webp" multiple className="hidden" onChange={handleFileSelect} />
             {!parsing && !parseError ? (
               <div className="flex flex-col items-center gap-3">
                 <svg className="w-10 h-10 text-[var(--navy-light)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">

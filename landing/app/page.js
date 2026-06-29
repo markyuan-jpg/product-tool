@@ -74,8 +74,8 @@ export default function Home() {
   const handleFile = async (file) => {
     if (processingRef.current || fileEntries.length >= MAX_FREE_FILES) return;
     processingRef.current = true;
-    const valid = ['.xlsx', '.xls', '.pdf', '.docx'].some(ext => file.name.toLowerCase().endsWith(ext));
-    if (!valid) { toast.addToast(locale === 'zh' ? '仅支持 .xlsx / .xls / .pdf / .docx 格式' : 'Only .xlsx / .xls / .pdf / .docx supported', { type: 'error' }); processingRef.current = false; return; }
+    const valid = ['.xlsx', '.xls', '.pdf', '.docx', '.jpg', '.jpeg', '.png', '.webp'].some(ext => file.name.toLowerCase().endsWith(ext));
+    if (!valid) { toast.addToast(locale === 'zh' ? '仅支持 Excel/PDF/Word/JPG/PNG 格式' : 'Only Excel/PDF/Word/JPG/PNG supported', { type: 'error' }); processingRef.current = false; return; }
     setParsing(true); setParseError(null);
     try {
       const fd = new FormData(); fd.append('file', file);
@@ -188,7 +188,7 @@ export default function Home() {
           <div onDragOver={handleDrag} onDragEnter={() => setDragOver(true)} onDragLeave={() => setDragOver(false)}
             onDrop={handleDrop} onClick={handleClick}
             className={'w-full max-w-xl mx-auto border-2 border-dashed rounded-2xl p-10 transition-all duration-300 cursor-pointer ' + (dragOver ? 'border-[var(--gold)] bg-[var(--gold)]/5 scale-[1.02]' : 'border-[var(--border)] hover:border-[var(--navy)] hover:bg-gray-50') + (uploadLocked ? ' opacity-60' : '')}>
-            <input ref={inputRef} type="file" accept=".xlsx,.xls,.pdf,.docx" multiple onChange={handleFileSelect} className="hidden" />
+            <input ref={inputRef} type="file" accept=".xlsx,.xls,.pdf,.docx,.jpg,.jpeg,.png,.webp" multiple onChange={handleFileSelect} className="hidden" />
             {parsing ? (
               <div className="flex flex-col items-center gap-3"><div className="w-9 h-9 border-[2.5px] border-[var(--navy)] border-t-transparent rounded-full animate-spin" /><p className="text-sm">{t('home.hero.parsing', locale)}</p></div>
             ) : uploadLocked ? (
@@ -249,7 +249,7 @@ export default function Home() {
                 </label>
               )}
               {!uploadLocked && <button onClick={handleAddFileClick} className="file-tab-add" title={t('home.addFile', locale)}>+</button>}
-              <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.pdf,.docx" multiple onChange={handleAddFileSelect} className="hidden" />
+              <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.pdf,.docx,.jpg,.jpeg,.png,.webp" multiple onChange={handleAddFileSelect} className="hidden" />
             </div>
 
             {/* Count + CTA */}
