@@ -706,6 +706,12 @@ def parse_with_colmap(ws, header_row: int, col_map: dict) -> pd.DataFrame:
         if model_col is not None and spec_col is not None and model_col == spec_col:
             if name_col is not None and name_col != model_col:
                 model = name
+        # 安全网：model_col 和 price_col 指向同一列(价格数字被误判为型号)
+        if model_col is not None and price_col is not None and model_col == price_col:
+            if name_col is not None and name_col != model_col:
+                model = name
+            else:
+                model = ''
         # 如果 model 远超 name 长度（如取到了规格列），回退到 name
         if model and name and len(model) > len(name) * 3:
             model = name
