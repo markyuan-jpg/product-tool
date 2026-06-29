@@ -8,6 +8,7 @@ import { friendlyError } from '@/lib/errors';
 import Nav from '@/components/Nav';
 import Footer from '@/components/Footer';
 import { useToast } from '@/components/Toast';
+import ImageGallery from '@/components/ImageGallery';
 
 // 带超时的 fetch 封装
 async function fetchWithTimeout(url, options = {}, timeoutMs = 30000) {
@@ -70,6 +71,7 @@ function UploadSection({ onSaveSuccess, user }) {
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState(null);
   const [failedImages, setFailedImages] = useState(new Set());
+  const [galleryImages, setGalleryImages] = useState(null);  // { images: string[], index: number }
   const inputRef = useRef(null);
   const [pasteText, setPasteText] = useState('');
   const [pasteImages, setPasteImages] = useState([]);
@@ -188,8 +190,9 @@ function UploadSection({ onSaveSuccess, user }) {
                 <p className="text-sm text-[var(--error)]">{parseError}</p>
                 <button onClick={(e) => { e.stopPropagation(); reset(); }} className="px-4 py-2 rounded-lg border text-sm cursor-pointer">{t('workspace.upload.reupload', locale)}</button>
               </div>
-            )}
-          </div>
+      )}
+      {galleryImages && <ImageGallery images={galleryImages.images} initialIndex={galleryImages.index} onClose={() => setGalleryImages(null)} />}
+    </div>
         </div>
       )}
 
@@ -217,7 +220,10 @@ function UploadSection({ onSaveSuccess, user }) {
                           return (<>
                             <img src={API_BASE + '/api/images/?path=' + encodeURIComponent(paths[0])} alt="" className="w-full h-full object-cover cursor-pointer" loading="lazy"
                               onError={() => setFailedImages(prev => { const n = new Set(prev); n.add(i); return n; })}
-                              onClick={() => { if (paths.length > 1) { const w = window.open(''); w.document.write(paths.map(pp => '<img src=\"' + API_BASE + '/api/images/?path=' + encodeURIComponent(pp) + '\" style=\"max-width:100%;margin-bottom:10px;display:block\" />').join('')); } }} />
+                              onClick={() => {
+                                const urls = paths.map(pp => API_BASE + '/api/images/?path=' + encodeURIComponent(pp));
+                                if (urls.length > 0) setGalleryImages({ images: urls, index: 0 });
+                              }} />
                             {paths.length > 1 && <span className="absolute -bottom-0.5 -right-0.5 bg-[var(--navy)] text-white text-[8px] rounded-full w-4 h-4 flex items-center justify-center">+{paths.length - 1}</span>}
                           </>);
                         })() : <span className="text-xs text-[var(--text-secondary)]">{t('workspace.upload.noImage', locale)}</span>}
@@ -254,6 +260,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(new Set());
   const [failedImages, setFailedImages] = useState(new Set());
+  const [galleryImages, setGalleryImages] = useState(null);
   const [exportOpen, setExportOpen] = useState(true);
   const [exportType, setExportType] = useState('quotation');
   const [exportLoading, setExportLoading] = useState(false);
@@ -374,7 +381,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
 
   const handleBatchDelete = async () => {
     if (selected.size === 0) return;
-    if (!confirm(t('workspace.productLib.confirmBatchDelete', locale).replace('{count}', selected.size))) return;
+    toast.confirm(t('workspace.productLib.confirmBatchDelete', locale).replace('{count}', selected.size), async () => {
     try {
       const b = new URLSearchParams(); b.append('product_ids', JSON.stringify(Array.from(selected)));
       const r = await fetchWithTimeout(API_BASE + '/api/products/batch-delete', {
@@ -384,15 +391,17 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
       if (!r.ok) throw new Error(t('workspace.productLib.deleteFailed', locale));
       setSelected(new Set()); fetchProducts();
     } catch (err) { toast.addToast(t('workspace.productLib.deleteFailed', locale), { type: 'error' }); }
+    });
   };
 
   const handleDelete = async (id) => {
-    if (!confirm(t('workspace.productLib.confirmDelete', locale))) return;
+    toast.confirm(t('workspace.productLib.confirmDelete', locale), async () => {
     try {
       const r = await fetchWithTimeout(API_BASE + '/api/products/' + id, { method: 'DELETE', headers: { ...SID() }, credentials: 'include' }, 15000);
       if (!r.ok) throw new Error(t('workspace.productLib.deleteFailed', locale));
       fetchProducts();
     } catch (err) { toast.addToast(t('workspace.productLib.deleteFailed', locale), { type: 'error' }); }
+    });
   };
 
   const saveCustomer = () => {
@@ -411,7 +420,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
 
   const deleteCustomer = () => {
     if (!selectedCustomer) return;
-    if (!confirm(t('workspace.export.confirmDeleteCustomer', locale).replace('{name}', selectedCustomer))) return;
+    toast.confirm(t('workspace.export.confirmDeleteCustomer', locale).replace('{name}', selectedCustomer), () => {
     const list = customers.filter(x => x.name !== selectedCustomer);
     setCustomers(list);
     localStorage.setItem('customers', JSON.stringify(list));
@@ -421,6 +430,7 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
     setPiBuyerContact('');
     setPiBuyerTel('');
     setPiBuyerEmail('');
+    });
   };
 
   const handleExport = async () => {
@@ -755,7 +765,10 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
                             <img src={API_BASE + '/api/images/?path=' + encodeURIComponent(paths[0])}
                               className="w-[60px] h-[60px] object-cover rounded border cursor-pointer" loading="lazy"
                               onError={(e) => { e.currentTarget.style.display = 'none'; const el = e.currentTarget.nextElementSibling; if (el) el.style.display = 'flex'; }}
-                              onClick={() => { if (paths.length > 1) { const w = window.open(''); w.document.write(paths.map(pp => '<img src=\"' + API_BASE + '/api/images/?path=' + encodeURIComponent(pp) + '\" style=\"max-width:90vw;margin-bottom:10px;display:block\" />').join('')); } }}
+                              onClick={() => {
+                                const urls = paths.map(pp => API_BASE + '/api/images/?path=' + encodeURIComponent(pp));
+                                if (urls.length > 0) setGalleryImages({ images: urls, index: 0 });
+                              }}
                               alt="" />
                             {paths.length > 1 && <span className="absolute bottom-0 right-0 bg-[var(--navy)] text-white text-[10px] rounded-full w-5 h-5 flex items-center justify-center">+{paths.length - 1}</span>}
                           </>);
@@ -832,8 +845,9 @@ function ProductLibrarySection({ refreshKey, user, onQuotationGenerated }) {
                           </select>
                           {selectedCustomer && (
                             <button onClick={deleteCustomer} className="px-2 py-1.5 rounded-lg border border-red-300 text-red-500 text-xs hover:bg-red-50 cursor-pointer" title={t('workspace.export.deleteCustomer', locale)}>🗑</button>
-                          )}
-                        </div>
+      )}
+      {galleryImages && <ImageGallery images={galleryImages.images} initialIndex={galleryImages.index} onClose={() => setGalleryImages(null)} />}
+    </div>
                         <div className="grid grid-cols-2 gap-2">
                           <input type="text" value={piBuyerAddress} onChange={e => setPiBuyerAddress(e.target.value)} placeholder={t('workspace.export.phAddress', locale)} className="px-3 py-1.5 text-sm border rounded-lg" />
                           <input type="text" value={piBuyerContact} onChange={e => setPiBuyerContact(e.target.value)} placeholder={t('workspace.export.phContact', locale)} className="px-3 py-1.5 text-sm border rounded-lg" />
@@ -1177,17 +1191,18 @@ function QuotationHistorySection({ refreshKey }) {
   };
 
   const handleDelete = async (id) => {
-    if (!confirm(t('workspace.quotationHistory.confirmDelete', locale))) return;
+    toast.confirm(t('workspace.quotationHistory.confirmDelete', locale), async () => {
     try {
       const r = await fetchWithTimeout(API_BASE + '/api/quotations/' + id, { method: 'DELETE', headers: { ...SID() }, credentials: 'include' }, 15000);
       if (!r.ok) throw new Error(t('workspace.quotationHistory.deleteFailed', locale));
       fetchQuotations();
     } catch (err) {       toast.addToast(t('workspace.quotationHistory.deleteFailed', locale), { type: 'error' }); }
+    });
   };
 
   const handleBatchDelete = async () => {
     if (selectedIds.size === 0) return;
-    if (!confirm(t('workspace.quotationHistory.confirmBatchDelete', locale).replace('{count}', selectedIds.size))) return;
+    toast.confirm(t('workspace.quotationHistory.confirmBatchDelete', locale).replace('{count}', selectedIds.size), async () => {
     try {
       const b = new URLSearchParams();
       b.append('ids', JSON.stringify(Array.from(selectedIds)));
@@ -1198,11 +1213,12 @@ function QuotationHistorySection({ refreshKey }) {
       if (!r.ok) throw new Error(t('workspace.quotationHistory.deleteFailed', locale));
       fetchQuotations();
     } catch (err) {       toast.addToast(t('workspace.quotationHistory.deleteFailed', locale), { type: 'error' }); }
+    });
   };
 
   const handleDeleteAll = async () => {
     if (quotations.length === 0) return;
-    if (!confirm(t('workspace.quotationHistory.confirmDeleteAll', locale))) return;
+    toast.confirm(t('workspace.quotationHistory.confirmDeleteAll', locale), async () => {
     try {
       const ids = quotations.map(q => q.id);
       const b = new URLSearchParams();
@@ -1214,6 +1230,7 @@ function QuotationHistorySection({ refreshKey }) {
       if (!r.ok) throw new Error(t('workspace.quotationHistory.deleteFailed', locale));
       fetchQuotations();
     } catch (err) {       toast.addToast(t('workspace.quotationHistory.deleteFailed', locale), { type: 'error' }); }
+    });
   };
 
   return (
