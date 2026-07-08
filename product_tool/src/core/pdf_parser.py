@@ -86,6 +86,19 @@ def extract_images_from_pdf(pdf_path: str, output_dir: str = None) -> List[Dict]
         page = doc[page_num]
         img_list = page.get_images(full=True)
         
+        # Build xref -> bbox map from page text dict (image blocks)
+        img_bboxes = {}
+        try:
+            page_dict = page.get_text("dict")
+            for block in page_dict.get("blocks", []):
+                if block.get("type") == 1:  # image block
+                    xref = block.get("xref")
+                    bbox = block.get("bbox")
+                    if xref is not None and bbox is not None:
+                        img_bboxes[xref] = bbox
+        except Exception:
+            pass
+        
         for img_index, img in enumerate(img_list):
             try:
                 xref = img[0]
@@ -101,20 +114,28 @@ def extract_images_from_pdf(pdf_path: str, output_dir: str = None) -> List[Dict]
                 
                 # 获取图片在页面上的垂直位置
                 y_center = 0
-                try:
-                    rects = page.get_image_rects(xref)
-                    if rects:
-                        y_center = (rects[0].y0 + rects[0].y1) / 2
-                except Exception:
-                    pass
+                x0, y0, x1, y1 = 0, 0, 0, 0
+                
+                if xref in img_bboxes:
+                    x0, y0, x1, y1 = img_bboxes[xref]
+                    y_center = (y0 + y1) / 2
+                else:
+                    try:
+                        rects = page.get_image_rects(xref)
+                        if rects:
+                            x0, y0, x1, y1 = rects[0].x0, rects[0].y0, rects[0].x1, rects[0].y1
+                            y_center = (y0 + y1) / 2
+                    except Exception:
+                        pass
                 
                 images.append({
                     'page': page_num + 1,
                     'index': img_index,
                     'image_path': img_path,
                     'y_center': y_center,
+                    'x0': x0, 'y0': y0, 'x1': x1, 'y1': y1,
                 })
-                logger.info(f"Extracted: {img_path}")
+                logger.info(f"Extracted: {img_path} (y={y_center:.0f})")
             except Exception as e:
                 logger.error(f"Image extraction error: {e}")
                 continue
@@ -521,6 +542,17 @@ def _parse_pdf_by_content(table) -> 'pd.DataFrame':
     # 从表头行获取 spec 列名
     header_row = table[0] if len(table) > 0 else []
     
+    # 从表头检测币种
+    currency = 'CNY'
+    if price_col is not None and price_col < len(header_row):
+        price_header = str(header_row[price_col] or '').lower()
+        if '$' in price_header or 'usd' in price_header or 'us dollar' in price_header:
+            currency = 'USD'
+        elif '€' in price_header or 'eur' in price_header:
+            currency = 'EUR'
+        elif '¥' in price_header or 'rmb' in price_header or 'cny' in price_header or 'yuan' in price_header:
+            currency = 'CNY'
+    
     products = []
     for r in range(1, len(table)):
         model = str(table[r][model_col] or '').strip()
@@ -560,6 +592,7 @@ def _parse_pdf_by_content(table) -> 'pd.DataFrame':
             'name_zh': '',
             'price_rmb': price,
             'spec_zh': spec_zh,
+            'currency': currency,
             '_image_path': '',
             '_source_file': '',
             '_row': r,
@@ -1393,19 +1426,33 @@ def _associate_images_to_products(df: pd.DataFrame, images: List[Dict]) -> pd.Da
         p = img.get('page', 0)
         images_by_page.setdefault(p, []).append(img)
     
-    # 对每个页面，按 (page, 页内序号) 排序图片
+    # 对每个页面，按 y_center（从上到下）排序图片
     for p in images_by_page:
-        images_by_page[p].sort(key=lambda x: x.get('index', 0))
+        # 如果有 y 坐标 → 按垂直位置排序；否则按 index
+        if any(img.get('y_center', 0) > 0 for img in images_by_page[p]):
+            images_by_page[p].sort(key=lambda x: x.get('y_center', float('inf')))
+        else:
+            images_by_page[p].sort(key=lambda x: x.get('index', 0))
     
-    # 产品按页面分组，同一个页面内的产品按出现顺序与图片一一对应
+    # 产品按页面分组，按 y 坐标匹配图片
+    # 同产品名的行共享图片（同名产品的多个变体）
     page_groups = df.groupby('_page')
     result_parts = []
     for page_num, group_df in page_groups:
         group_df = group_df.copy()
         page_images = images_by_page.get(page_num, [])
         if page_images:
-            for i in range(min(len(group_df), len(page_images))):
+            n_match = min(len(group_df), len(page_images))
+            for i in range(n_match):
                 group_df.iloc[i, group_df.columns.get_loc('_image_path')] = page_images[i]['image_path']
+            # 同名产品共享图片：如果后续产品与前一个同名，复制图片
+            for i in range(n_match, len(group_df)):
+                cur_model = str(group_df.iloc[i].get('model', '')).strip()
+                prev_model = str(group_df.iloc[i-1].get('model', '')).strip() if i > 0 else ''
+                if cur_model and prev_model and cur_model == prev_model:
+                    prev_img = group_df.iloc[i-1, group_df.columns.get_loc('_image_path')]
+                    if prev_img:
+                        group_df.iloc[i, group_df.columns.get_loc('_image_path')] = prev_img
         result_parts.append(group_df)
     
     df = pd.concat(result_parts) if result_parts else df
