@@ -362,6 +362,16 @@ SKIP_PDF_COLUMN_KEYWORDS = {'serial', 'no.', 'no', '序号', '序號', 'image', 
 PACKAGING_CONTENT_KEYWORDS = ['pcs/', 'pcs/pack', 'pcs/box', 'pack', 'pieces',
                                '个/箱', '个/包', '只/箱', '装箱']
 
+# 表头→角色映射（优先级最高）
+PDF_HEADER_ROLE_MAP = {
+    'price': ['price', 'unit price', '单价', '价格', '售价', '报价', 'fob', 'exw', 'cif', '($)', '(¥)', '(rmb)', '(usd)', '(cny)'],
+    'qty': ['qty', 'quantity', '数量', '件数', 'moq', 'min order', '起订量', '最小起订量', 'packing quantity'],
+    'model': ['model', '型号', '规格型号', 'product name', '产品名称', 'product code', '产品型号', 'item no', 'item #'],
+    'spec': ['spec', 'specification', '规格', 'description', '描述', '材质', '尺寸', '参数'],
+    'packaging': ['carton', '包装', '装箱', '毛重', '净重', '尺寸', 'cbm', 'capacity', 'capacity', 'box size', 'carton size', 'shipping', 'estimate'],
+    'skip': ['photo', 'image', 'picture', '图片', 'no.', '#', '序号'],
+}
+
 
 def _classify_pdf_columns(table) -> dict:
     """从PDF表格数据内容分类每列角色（不依赖表头）
@@ -387,6 +397,29 @@ def _classify_pdf_columns(table) -> dict:
     
     roles = {}
     for c in range(len(table[0])):
+        # === 表头优先：表头关键词直接锁定角色 ===
+        header_role = None
+        if c < len(header_row) and header_row[c]:
+            h = header_row[c]
+            # Tokenize header into words for exact matching of short keywords
+            h_words = set(h.replace('/', ' ').replace('-', ' ').replace('(', ' ').replace(')', ' ').split())
+            for role, keywords in PDF_HEADER_ROLE_MAP.items():
+                for kw in keywords:
+                    # Short keywords (<=3 chars) must be standalone to avoid substring false matches
+                    # e.g. 'cif' should not match inside 'specifications'
+                    if len(kw.rstrip('$¥() ')) <= 3:
+                        if kw in h_words:
+                            header_role = role
+                            break
+                    elif kw in h:
+                        header_role = role
+                        break
+                if header_role:
+                    break
+        if header_role in ('skip', 'packaging'):
+            roles[c] = header_role
+            continue
+        
         texts = []
         label_count = 0
         model_count = 0
@@ -413,7 +446,7 @@ def _classify_pdf_columns(table) -> dict:
             if v.isdigit() and 1 <= int(v) <= 999:
                 seq_count += 1
             elif v and not v.isdigit():
-                all_ints = False  # 非数字 → 不是纯序号列
+                all_ints = False
             
             # 标签检测
             if v_lower in {'image', 'picture', 'photo', 'description', 'name',
@@ -427,7 +460,7 @@ def _classify_pdf_columns(table) -> dict:
                 packaging_count += 1
             if re.search(r'[A-Za-z]+\d+', v):
                 model_count += 1
-            # 价格检测（放宽小数阈值）
+            # 价格检测
             cleaned = re.sub(r'[¥$€£USDusd,\s]', '', v)
             try:
                 f = float(cleaned)
@@ -438,13 +471,16 @@ def _classify_pdf_columns(table) -> dict:
         
         if not texts:
             roles[c] = 'skip'
+        # 表头角色优先（price/qty/model/spec）
+        elif header_role and header_role in ('price', 'qty', 'model', 'spec'):
+            roles[c] = header_role
         elif packaging_count >= max(1, len(texts) * 0.15):
             roles[c] = 'packaging'
         elif seq_count >= max(3, len(texts) * 0.8) and all_ints:
-            roles[c] = 'skip'  # 纯序号列
+            roles[c] = 'skip'
         elif label_count >= max(2, len(texts) * 0.3):
             roles[c] = 'label'
-        elif price_count >= max(2, len(texts) * 0.2):
+        elif price_count >= max(2, len(texts) * 0.2) and not all_ints:
             roles[c] = 'price'
         elif model_count >= max(2, len(texts) * 0.15):
             roles[c] = 'model'
@@ -635,11 +671,16 @@ def _is_valid_pdf_model(m) -> bool:
     m = str(m).strip()
     if len(m) < 2:
         return False
+    # 含冒号 → 规格值
+    if ':' in m or '：' in m:
+        return False
+    # 过滤规格表达式(mmxmm, usd结尾等)
+    spec_patterns = [r'\d+\s*mm', r'mm\*mm', r'usd$', r'\d+usd', r'^\d+\.\d+']
+    for pat in spec_patterns:
+        if re.search(pat, m, re.I):
+            return False
     has_letter = any(c.isalpha() for c in m)
     has_digit = any(c.isdigit() for c in m)
-    if not (has_letter and has_digit):
-        # 纯数字或纯字母（如"Appearance"）不是产品型号
-        return False
     # 排除已知参数名（包含即可，如"Model XF-1"含"Model"）
     param_keywords = {'motor', 'battery', 'weight', 'speed', 'power', 'voltage',
                       'current', 'controller', 'charger', '颜色', '规格', '参数',
@@ -652,7 +693,20 @@ def _is_valid_pdf_model(m) -> bool:
     # 排除过长文本（大概率是描述不是型号）
     if len(m) > 40:
         return False
-    return True
+    if has_letter and has_digit:
+        return True  # 传统型号：字母+数字
+    # 纯数字 → 允许(可能是序号)
+    if has_digit and not has_letter:
+        return len(m) >= 2
+    # 纯英文产品名：多词或有连字符，且不太短
+    if has_letter and not has_digit:
+        words = m_lower.replace('-', ' ').replace('/', ' ').split()
+        if len(words) >= 2 or len(m) >= 5:
+            return True
+    # 纯中文
+    if any('\u4e00' <= c <= '\u9fff' for c in m) and len(m) >= 3:
+        return True
+    return False
 
 
 def _score_pdf_result(df, source='content') -> float:
@@ -1024,9 +1078,8 @@ def extract_products_from_pdf_v2(pdf_path: str) -> Optional[pd.DataFrame]:
                     continue
                 # 过滤真正的产品型号(至少含一个字母+数字)
                 model_str = str(model).strip()
-                if not (any(c.isalpha() for c in model_str) and any(c.isdigit() for c in model_str)):
-                    if not (model_str.isdigit() and len(model_str) >= 2):
-                        continue
+                if not _is_valid_pdf_model(model_str):
+                    continue
                 # 跳过规格值(如 "Front:3.0-18" 是规格内容不是型号)
                 if ':' in model_str or '：' in model_str:
                     continue
@@ -1307,39 +1360,7 @@ def extract_products_from_pdf_v2(pdf_path: str) -> Optional[pd.DataFrame]:
     if 'model' in df.columns:
         mask = df['model'].notna() & (df['model'] != '') & (df['model'].astype(str).str.strip() != '')
         df = df[mask]
-        
-        def _is_real_model(m):
-            m = str(m).strip()
-            if not m:
-                return False
-            if len(m) < 2:
-                return False
-            # 含冒号 → 规格值
-            if ':' in m or '：' in m:
-                return False
-            # 纯数字 → 允许(可能是序列号)
-            if m.isdigit():
-                return len(m) >= 2
-            # 必须含至少一个字母+一个数字
-            if not (any(c.isalpha() for c in m) and any(c.isdigit() for c in m)):
-                return False
-            # 过滤规格表达式(mmxmm, usd结尾等)
-            spec_patterns = [r'\d+\s*mm', r'mm\*mm', r'usd$', r'\d+usd', r'^\d+\.\d+']
-            for pat in spec_patterns:
-                if re.search(pat, m, re.I):
-                    return False
-            # 过滤已知参数名
-            if m.lower() in {'motor', 'battery', 'weight', 'speed', 'controller',
-                             'charging', 'dimension', 'wheelbase', 'tire', 'tyre',
-                             'brake', 'suspension', 'ground', 'clearance', 'seat',
-                             'height', 'material', 'color', 'tires', 'front', 'rear',
-                             'length', 'width', 'full height', 'addon', 'power',
-                             'voltage', 'current', 'torque', 'range', '产品', '参数',
-                             '规格', '尺寸', '报价', '价格', '马达', '电机'}:
-                return False
-            return True
-        
-        df = df[df['model'].astype(str).apply(_is_real_model)]
+        df = df[df['model'].astype(str).apply(_is_valid_pdf_model)]
     df = df.reset_index(drop=True)
     df['_row'] = range(1, len(df) + 1)
     df['_sheet'] = os.path.basename(pdf_path)
